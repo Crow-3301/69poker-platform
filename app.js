@@ -400,15 +400,21 @@ function initKineticHeader() {
   if (!stage || stage.dataset.initialized === 'true') return;
 
   const word = $('.kinetic-word', stage);
+  const art = $('.kinetic-art', stage);
   const glyph = $('.kinetic-glyph', stage);
   const split = $('.kinetic-split', stage);
   const splitHalves = $$('.kinetic-split-half', stage);
   const canvas = $('.kinetic-particles', stage);
   const context = canvas?.getContext('2d');
-  if (!word || !glyph || !split || !splitHalves.length || !context) return;
+  if (!word || !art || !glyph || !split || !splitHalves.length || !context) return;
 
   stage.dataset.initialized = 'true';
   const phrases = ['SIX & NINE CLUB', 'POKER LIVE GAME'];
+  const titleAssets = {
+    'SIX & NINE CLUB': 'assets/kinetic-title-six-nine-v1.webp',
+    'POKER LIVE GAME': 'assets/kinetic-title-poker-live-v1.webp'
+  };
+  Object.values(titleAssets).forEach(source => { const image = new Image(); image.src = source; });
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const timers = new Set();
   const particlePalette = ['#d8d4cd', '#8e9094', '#55575c', '#ff4d43', '#f7a05b'];
@@ -446,14 +452,21 @@ function initKineticHeader() {
 
   function relativeGlyphRect() {
     const stageRect = stage.getBoundingClientRect();
-    const glyphRect = glyph.getBoundingClientRect();
+    const artRect = art.getBoundingClientRect();
+    const naturalWidth = art.naturalWidth || artRect.width;
+    const naturalHeight = art.naturalHeight || artRect.height;
+    const scale = Math.min(artRect.width / naturalWidth, artRect.height / naturalHeight);
+    const width = naturalWidth * scale;
+    const height = naturalHeight * scale;
+    const left = artRect.left + (artRect.width - width) * .5;
+    const top = artRect.top + (artRect.height - height) * .5;
     return {
-      left: glyphRect.left - stageRect.left,
-      top: glyphRect.top - stageRect.top,
-      right: glyphRect.right - stageRect.left,
-      bottom: glyphRect.bottom - stageRect.top,
-      width: glyphRect.width,
-      height: glyphRect.height
+      left: left - stageRect.left,
+      top: top - stageRect.top,
+      right: left + width - stageRect.left,
+      bottom: top + height - stageRect.top,
+      width,
+      height
     };
   }
 
@@ -483,7 +496,14 @@ function initKineticHeader() {
         context.shadowBlur = particle.glow;
         context.shadowColor = particle.color;
       }
-      context.fillRect(-particle.size * .5, -particle.size * .34, particle.size, particle.size * .68);
+      if (particle.soft) {
+        context.filter = `blur(${particle.blur}px)`;
+        context.beginPath();
+        context.arc(0, 0, particle.size, 0, Math.PI * 2);
+        context.fill();
+      } else {
+        context.fillRect(-particle.size * .5, -particle.size * .34, particle.size, particle.size * .68);
+      }
       context.restore();
       active.push(particle);
     });
@@ -566,45 +586,50 @@ function initKineticHeader() {
 
     const sampleCanvas = document.createElement('canvas');
     const sampleWidth = Math.max(1, Math.ceil(rect.width));
-    const sampleHeight = Math.max(1, Math.ceil(rect.height * 1.45));
+    const sampleHeight = Math.max(1, Math.ceil(rect.height));
     sampleCanvas.width = sampleWidth;
     sampleCanvas.height = sampleHeight;
     const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true });
-    const glyphStyle = window.getComputedStyle(glyph);
     sampleContext.clearRect(0, 0, sampleWidth, sampleHeight);
-    sampleContext.fillStyle = '#fff';
-    sampleContext.font = glyphStyle.font;
-    sampleContext.textAlign = 'center';
-    sampleContext.textBaseline = 'middle';
-    sampleContext.fillText(glyph.textContent, sampleWidth * .5, sampleHeight * .5);
+    sampleContext.drawImage(art, 0, 0, sampleWidth, sampleHeight);
 
     const pixels = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data;
     const now = performance.now();
-    const step = stageBounds.width < 340 ? 4 : 3;
-    const maxParticles = stageBounds.width < 340 ? 260 : 470;
+    const step = stageBounds.width < 340 ? 3 : 3;
+    const maxParticles = stageBounds.width < 340 ? 420 : 860;
     const dust = [];
 
     for (let y = 0; y < sampleHeight && dust.length < maxParticles; y += step) {
       for (let x = 0; x < sampleWidth && dust.length < maxParticles; x += step) {
-        const alpha = pixels[(y * sampleWidth + x) * 4 + 3];
-        if (alpha < 64 || Math.random() > .64) continue;
-        const sweep = (x / sampleWidth) * 440 + (1 - y / sampleHeight) * 120;
-        const accent = Math.random() > .91;
+        const offset = (y * sampleWidth + x) * 4;
+        const red = pixels[offset];
+        const green = pixels[offset + 1];
+        const blue = pixels[offset + 2];
+        const brightness = Math.max(red, green, blue);
+        if (brightness < 18 || Math.random() > .6) continue;
+        const sweep = randomBetween(0, 520) + (1 - y / sampleHeight) * 90;
+        const accent = red > green * 1.28 && red > 58;
+        const soft = !accent && dust.length % 13 === 0;
+        const chunk = !soft && dust.length % 9 === 0;
+        const gray = Math.round(Math.max(88, Math.min(224, brightness * randomBetween(.82, 1.18))));
+        const powderOpacity = randomBetween(.52, .9) * Math.max(.42, Math.min(1, brightness / 168));
         dust.push({
           x: rect.left + x,
-          y: rect.top + y - (sampleHeight - rect.height) * .5,
-          vx: randomBetween(13, 58) + (x / sampleWidth) * 16,
-          vy: randomBetween(-34, 16),
-          gravity: randomBetween(-10, 7),
+          y: rect.top + y,
+          vx: randomBetween(chunk ? -19 : -11, chunk ? 19 : 11),
+          vy: randomBetween(chunk ? -31 : -22, chunk ? 10 : 6),
+          gravity: randomBetween(-6, 4),
           birth: now + sweep + randomBetween(0, 190),
-          life: randomBetween(760, 1380),
-          size: randomBetween(.8, 3.15),
+          life: randomBetween(880, 1580),
+          size: soft ? randomBetween(4.2, 9.4) : (chunk ? randomBetween(2.8, 5.2) : randomBetween(.8, 2.7)),
           rotation: randomBetween(0, Math.PI),
-          spin: randomBetween(-5.2, 5.2),
-          color: accent ? (Math.random() > .5 ? '#ff4d43' : '#f2a05d') : particlePalette[Math.floor(randomBetween(0, 3))],
-          opacity: randomBetween(.52, .96) * (alpha / 255),
-          fadePower: randomBetween(1.1, 1.9),
-          glow: accent ? 3 : 0
+          spin: soft ? randomBetween(-.8, .8) : randomBetween(-5.2, 5.2),
+          color: accent ? (Math.random() > .5 ? '#ff4d43' : '#f2a05d') : `rgb(${gray},${gray},${gray})`,
+          opacity: soft ? randomBetween(.12, .24) : (chunk ? randomBetween(.72, .98) : powderOpacity),
+          fadePower: soft ? randomBetween(.8, 1.25) : randomBetween(1.1, 1.9),
+          glow: accent ? 3 : 0,
+          soft,
+          blur: soft ? randomBetween(2.2, 4.2) : 0
         });
       }
     }
@@ -613,11 +638,12 @@ function initKineticHeader() {
   }
 
   function setPhrase(text) {
+    const source = titleAssets[text];
     word.dataset.text = text;
     glyph.dataset.text = text;
     glyph.textContent = text;
-    split.dataset.text = text;
-    splitHalves.forEach(half => { half.textContent = text; });
+    art.src = source;
+    splitHalves.forEach(half => { half.src = source; });
     stage.dataset.phrase = text;
   }
 
