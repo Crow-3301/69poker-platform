@@ -395,6 +395,298 @@ function runSearch(query) {
   box.hidden = false;
 }
 
+function initKineticHeader() {
+  const stage = $('[data-kinetic-header]');
+  if (!stage || stage.dataset.initialized === 'true') return;
+
+  const word = $('.kinetic-word', stage);
+  const glyph = $('.kinetic-glyph', stage);
+  const canvas = $('.kinetic-particles', stage);
+  const context = canvas?.getContext('2d');
+  if (!word || !glyph || !context) return;
+
+  stage.dataset.initialized = 'true';
+  const phrases = ['SIX & NINE CLUB', 'POKER LIVE GAME'];
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const timers = new Set();
+  const particlePalette = ['#d8d4cd', '#8e9094', '#55575c', '#ff4d43', '#f7a05b'];
+  let phraseIndex = 0;
+  let particles = [];
+  let frameId = 0;
+  let stageBounds = { width: 0, height: 0 };
+  let dpr = 1;
+
+  const randomBetween = (min, max) => min + Math.random() * (max - min);
+  const schedule = (callback, delay) => {
+    const timer = window.setTimeout(() => {
+      timers.delete(timer);
+      callback();
+    }, delay);
+    timers.add(timer);
+  };
+
+  function clearTimers() {
+    timers.forEach(timer => window.clearTimeout(timer));
+    timers.clear();
+  }
+
+  function resizeCanvas() {
+    const rect = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    stageBounds = { width: Math.max(1, rect.width), height: Math.max(1, rect.height) };
+    canvas.width = Math.round(stageBounds.width * dpr);
+    canvas.height = Math.round(stageBounds.height * dpr);
+    canvas.style.width = `${stageBounds.width}px`;
+    canvas.style.height = `${stageBounds.height}px`;
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    particles = [];
+  }
+
+  function relativeGlyphRect() {
+    const stageRect = stage.getBoundingClientRect();
+    const glyphRect = glyph.getBoundingClientRect();
+    return {
+      left: glyphRect.left - stageRect.left,
+      top: glyphRect.top - stageRect.top,
+      right: glyphRect.right - stageRect.left,
+      bottom: glyphRect.bottom - stageRect.top,
+      width: glyphRect.width,
+      height: glyphRect.height
+    };
+  }
+
+  function drawParticles(now) {
+    context.clearRect(0, 0, stageBounds.width, stageBounds.height);
+    const active = [];
+
+    particles.forEach(particle => {
+      if (now < particle.birth) {
+        active.push(particle);
+        return;
+      }
+
+      const age = (now - particle.birth) / 1000;
+      const progress = (now - particle.birth) / particle.life;
+      if (progress >= 1) return;
+
+      const fade = Math.pow(1 - progress, particle.fadePower);
+      const x = particle.x + particle.vx * age;
+      const y = particle.y + particle.vy * age + particle.gravity * age * age * .5;
+      context.save();
+      context.globalAlpha = fade * particle.opacity;
+      context.translate(x, y);
+      context.rotate(particle.rotation + particle.spin * age);
+      context.fillStyle = particle.color;
+      if (particle.glow) {
+        context.shadowBlur = particle.glow;
+        context.shadowColor = particle.color;
+      }
+      context.fillRect(-particle.size * .5, -particle.size * .34, particle.size, particle.size * .68);
+      context.restore();
+      active.push(particle);
+    });
+
+    particles = active;
+    if (particles.length) {
+      frameId = window.requestAnimationFrame(drawParticles);
+    } else {
+      frameId = 0;
+      context.clearRect(0, 0, stageBounds.width, stageBounds.height);
+    }
+  }
+
+  function addParticles(nextParticles) {
+    particles.push(...nextParticles);
+    if (!frameId) frameId = window.requestAnimationFrame(drawParticles);
+  }
+
+  function spawnImpactDust() {
+    const rect = relativeGlyphRect();
+    const now = performance.now();
+    const centerX = rect.left + rect.width * .5;
+    const baseY = rect.bottom + 2;
+    const count = stageBounds.width < 340 ? 38 : 62;
+    const burst = Array.from({ length: count }, (_, index) => {
+      const spread = randomBetween(-.48, .48);
+      const isAccent = index % 11 === 0;
+      return {
+        x: centerX + rect.width * spread,
+        y: baseY + randomBetween(-2, 3),
+        vx: spread * randomBetween(28, 68) + randomBetween(-7, 7),
+        vy: randomBetween(-48, -13),
+        gravity: randomBetween(48, 78),
+        birth: now + randomBetween(0, 90),
+        life: randomBetween(520, 980),
+        size: randomBetween(.8, isAccent ? 3.2 : 2.4),
+        rotation: randomBetween(0, Math.PI),
+        spin: randomBetween(-5.8, 5.8),
+        color: isAccent ? '#ff5044' : particlePalette[Math.floor(randomBetween(0, 3))],
+        opacity: randomBetween(.45, .94),
+        fadePower: 1.35,
+        glow: isAccent ? 5 : 0
+      };
+    });
+    addParticles(burst);
+  }
+
+  function spawnLaserSparks() {
+    const rect = relativeGlyphRect();
+    const now = performance.now();
+    const count = stageBounds.width < 340 ? 24 : 42;
+    const sparks = Array.from({ length: count }, (_, index) => {
+      const position = randomBetween(.08, .92);
+      const x = rect.left + rect.width * position;
+      const y = rect.top + rect.height * .52 - (x - (rect.left + rect.width * .5)) * .12;
+      const hot = index % 5 === 0;
+      return {
+        x,
+        y,
+        vx: randomBetween(16, 74) * (Math.random() > .18 ? 1 : -1),
+        vy: randomBetween(-62, 48),
+        gravity: randomBetween(4, 24),
+        birth: now + position * 380 + randomBetween(-35, 65),
+        life: randomBetween(360, 760),
+        size: randomBetween(.8, hot ? 3.1 : 2.1),
+        rotation: randomBetween(-.8, .8),
+        spin: randomBetween(-8, 8),
+        color: hot ? '#fff4e9' : (index % 3 ? '#ff483d' : '#f39b55'),
+        opacity: randomBetween(.62, 1),
+        fadePower: 1.7,
+        glow: hot ? 7 : 4
+      };
+    });
+    addParticles(sparks);
+  }
+
+  function spawnTextDust() {
+    const rect = relativeGlyphRect();
+    if (rect.width < 2 || rect.height < 2) return;
+
+    const sampleCanvas = document.createElement('canvas');
+    const sampleWidth = Math.max(1, Math.ceil(rect.width));
+    const sampleHeight = Math.max(1, Math.ceil(rect.height * 1.45));
+    sampleCanvas.width = sampleWidth;
+    sampleCanvas.height = sampleHeight;
+    const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true });
+    const glyphStyle = window.getComputedStyle(glyph);
+    sampleContext.clearRect(0, 0, sampleWidth, sampleHeight);
+    sampleContext.fillStyle = '#fff';
+    sampleContext.font = glyphStyle.font;
+    sampleContext.textAlign = 'center';
+    sampleContext.textBaseline = 'middle';
+    sampleContext.fillText(glyph.textContent, sampleWidth * .5, sampleHeight * .5);
+
+    const pixels = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data;
+    const now = performance.now();
+    const step = stageBounds.width < 340 ? 4 : 3;
+    const maxParticles = stageBounds.width < 340 ? 260 : 470;
+    const dust = [];
+
+    for (let y = 0; y < sampleHeight && dust.length < maxParticles; y += step) {
+      for (let x = 0; x < sampleWidth && dust.length < maxParticles; x += step) {
+        const alpha = pixels[(y * sampleWidth + x) * 4 + 3];
+        if (alpha < 64 || Math.random() > .64) continue;
+        const sweep = (x / sampleWidth) * 440 + (1 - y / sampleHeight) * 120;
+        const accent = Math.random() > .91;
+        dust.push({
+          x: rect.left + x,
+          y: rect.top + y - (sampleHeight - rect.height) * .5,
+          vx: randomBetween(13, 58) + (x / sampleWidth) * 16,
+          vy: randomBetween(-34, 16),
+          gravity: randomBetween(-10, 7),
+          birth: now + sweep + randomBetween(0, 190),
+          life: randomBetween(760, 1380),
+          size: randomBetween(.8, 3.15),
+          rotation: randomBetween(0, Math.PI),
+          spin: randomBetween(-5.2, 5.2),
+          color: accent ? (Math.random() > .5 ? '#ff4d43' : '#f2a05d') : particlePalette[Math.floor(randomBetween(0, 3))],
+          opacity: randomBetween(.52, .96) * (alpha / 255),
+          fadePower: randomBetween(1.1, 1.9),
+          glow: accent ? 3 : 0
+        });
+      }
+    }
+
+    addParticles(dust);
+  }
+
+  function setPhrase(text) {
+    word.dataset.text = text;
+    glyph.dataset.text = text;
+    glyph.textContent = text;
+    stage.dataset.phrase = text;
+  }
+
+  function stopSequence() {
+    clearTimers();
+    if (frameId) window.cancelAnimationFrame(frameId);
+    frameId = 0;
+    particles = [];
+    context.clearRect(0, 0, stageBounds.width, stageBounds.height);
+    stage.classList.remove('is-entering', 'is-impacting', 'is-laser', 'is-dissolving');
+  }
+
+  function runCycle() {
+    if (document.hidden || reducedMotion.matches) return;
+    clearTimers();
+    particles = [];
+    context.clearRect(0, 0, stageBounds.width, stageBounds.height);
+    stage.classList.remove('is-reduced', 'is-entering', 'is-impacting', 'is-laser', 'is-dissolving');
+    setPhrase(phrases[phraseIndex]);
+    stage.dataset.phase = 'drop';
+    void stage.offsetWidth;
+    stage.classList.add('is-entering');
+
+    schedule(() => {
+      stage.dataset.phase = 'impact';
+      stage.classList.add('is-impacting');
+      spawnImpactDust();
+      schedule(() => stage.classList.remove('is-impacting'), 720);
+    }, 700);
+
+    schedule(() => {
+      stage.dataset.phase = 'laser';
+      stage.classList.add('is-laser');
+      spawnLaserSparks();
+      schedule(() => stage.classList.remove('is-laser'), 920);
+    }, 1570);
+
+    schedule(() => {
+      stage.dataset.phase = 'dust';
+      stage.classList.remove('is-entering');
+      stage.classList.add('is-dissolving');
+      spawnTextDust();
+    }, 2820);
+
+    schedule(() => {
+      phraseIndex = (phraseIndex + 1) % phrases.length;
+      runCycle();
+    }, 5020);
+  }
+
+  function syncMotionPreference() {
+    stopSequence();
+    if (reducedMotion.matches) {
+      setPhrase(phrases[0]);
+      stage.dataset.phase = 'static';
+      stage.classList.add('is-reduced');
+      return;
+    }
+    stage.classList.remove('is-reduced');
+    runCycle();
+  }
+
+  const observer = new ResizeObserver(resizeCanvas);
+  observer.observe(stage);
+  resizeCanvas();
+  reducedMotion.addEventListener?.('change', syncMotionPreference);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopSequence();
+    else syncMotionPreference();
+  });
+  (document.fonts?.ready || Promise.resolve()).then(syncMotionPreference);
+}
+
 document.addEventListener('submit', handleSubmit);
 document.addEventListener('click', event => {
   const routeLink = event.target.closest('.route-link');
@@ -429,5 +721,6 @@ document.addEventListener('keydown', event => {
 
 window.addEventListener('hashchange', render);
 hydrateIcons();
+initKineticHeader();
 if (!location.hash) history.replaceState(null, '', '#/');
 render();
