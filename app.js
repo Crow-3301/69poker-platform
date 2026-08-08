@@ -401,9 +401,11 @@ function initKineticHeader() {
 
   const word = $('.kinetic-word', stage);
   const glyph = $('.kinetic-glyph', stage);
+  const split = $('.kinetic-split', stage);
+  const splitHalves = $$('.kinetic-split-half', stage);
   const canvas = $('.kinetic-particles', stage);
   const context = canvas?.getContext('2d');
-  if (!word || !glyph || !context) return;
+  if (!word || !glyph || !split || !splitHalves.length || !context) return;
 
   stage.dataset.initialized = 'true';
   const phrases = ['SIX & NINE CLUB', 'POKER LIVE GAME'];
@@ -536,7 +538,7 @@ function initKineticHeader() {
     const sparks = Array.from({ length: count }, (_, index) => {
       const position = randomBetween(.08, .92);
       const x = rect.left + rect.width * position;
-      const y = rect.top + rect.height * .52 - (x - (rect.left + rect.width * .5)) * .12;
+      const y = rect.top + rect.height * .52 + randomBetween(-1.5, 1.5);
       const hot = index % 5 === 0;
       return {
         x,
@@ -614,6 +616,8 @@ function initKineticHeader() {
     word.dataset.text = text;
     glyph.dataset.text = text;
     glyph.textContent = text;
+    split.dataset.text = text;
+    splitHalves.forEach(half => { half.textContent = text; });
     stage.dataset.phrase = text;
   }
 
@@ -623,7 +627,7 @@ function initKineticHeader() {
     frameId = 0;
     particles = [];
     context.clearRect(0, 0, stageBounds.width, stageBounds.height);
-    stage.classList.remove('is-entering', 'is-impacting', 'is-laser', 'is-dissolving');
+    stage.classList.remove('is-entering', 'is-impacting', 'is-laser', 'is-split', 'is-dissolving');
   }
 
   function runCycle() {
@@ -631,7 +635,7 @@ function initKineticHeader() {
     clearTimers();
     particles = [];
     context.clearRect(0, 0, stageBounds.width, stageBounds.height);
-    stage.classList.remove('is-reduced', 'is-entering', 'is-impacting', 'is-laser', 'is-dissolving');
+    stage.classList.remove('is-reduced', 'is-entering', 'is-impacting', 'is-laser', 'is-split', 'is-dissolving');
     setPhrase(phrases[phraseIndex]);
     stage.dataset.phase = 'drop';
     void stage.offsetWidth;
@@ -650,6 +654,11 @@ function initKineticHeader() {
       spawnLaserSparks();
       schedule(() => stage.classList.remove('is-laser'), 920);
     }, 1570);
+
+    schedule(() => {
+      stage.dataset.phase = 'split';
+      stage.classList.add('is-split');
+    }, 2020);
 
     schedule(() => {
       stage.dataset.phase = 'dust';
