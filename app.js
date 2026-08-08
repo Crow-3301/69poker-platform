@@ -411,8 +411,8 @@ function initKineticHeader() {
   stage.dataset.initialized = 'true';
   const phrases = ['SIX & NINE CLUB', 'POKER LIVE GAME'];
   const titleAssets = {
-    'SIX & NINE CLUB': 'assets/kinetic-title-six-nine-v1.webp',
-    'POKER LIVE GAME': 'assets/kinetic-title-poker-live-v1.webp'
+    'SIX & NINE CLUB': 'assets/kinetic-title-six-nine-v2.webp',
+    'POKER LIVE GAME': 'assets/kinetic-title-poker-live-v2.webp'
   };
   Object.values(titleAssets).forEach(source => { const image = new Image(); image.src = source; });
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -421,6 +421,10 @@ function initKineticHeader() {
   let phraseIndex = 0;
   let particles = [];
   let frameId = 0;
+  let dissolveLayer = null;
+  let dissolveCells = [];
+  let dissolveCursor = 0;
+  let dissolveStartedAt = 0;
   let stageBounds = { width: 0, height: 0 };
   let dpr = 1;
 
@@ -431,6 +435,10 @@ function initKineticHeader() {
       callback();
     }, delay);
     timers.add(timer);
+  };
+  const markPhase = (phase) => {
+    stage.dataset.phase = phase;
+    stage.dataset.phaseStartedAt = `${performance.now()}`;
   };
 
   function clearTimers() {
@@ -448,6 +456,9 @@ function initKineticHeader() {
     canvas.style.height = `${stageBounds.height}px`;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     particles = [];
+    dissolveLayer = null;
+    dissolveCells = [];
+    dissolveCursor = 0;
   }
 
   function relativeGlyphRect() {
@@ -473,6 +484,26 @@ function initKineticHeader() {
   function drawParticles(now) {
     context.clearRect(0, 0, stageBounds.width, stageBounds.height);
     const active = [];
+
+    if (dissolveLayer) {
+      const elapsed = now - dissolveStartedAt;
+      const layerContext = dissolveLayer.getContext('2d');
+      while (dissolveCursor < dissolveCells.length && dissolveCells[dissolveCursor].eraseAt <= elapsed) {
+        const cell = dissolveCells[dissolveCursor];
+        layerContext.clearRect(cell.x, cell.y, cell.size, cell.size);
+        dissolveCursor += 1;
+      }
+      if (elapsed < 1540) {
+        context.save();
+        context.globalCompositeOperation = 'screen';
+        context.drawImage(dissolveLayer, 0, 0, stageBounds.width, stageBounds.height);
+        context.restore();
+      } else {
+        dissolveLayer = null;
+        dissolveCells = [];
+        dissolveCursor = 0;
+      }
+    }
 
     particles.forEach(particle => {
       if (now < particle.birth) {
@@ -502,14 +533,14 @@ function initKineticHeader() {
         context.arc(0, 0, particle.size, 0, Math.PI * 2);
         context.fill();
       } else {
-        context.fillRect(-particle.size * .5, -particle.size * .34, particle.size, particle.size * .68);
+        context.fillRect(-particle.size * .5, -particle.size * .5, particle.size, particle.size);
       }
       context.restore();
       active.push(particle);
     });
 
     particles = active;
-    if (particles.length) {
+    if (particles.length || dissolveLayer) {
       frameId = window.requestAnimationFrame(drawParticles);
     } else {
       frameId = 0;
@@ -595,43 +626,133 @@ function initKineticHeader() {
 
     const pixels = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data;
     const now = performance.now();
-    const step = stageBounds.width < 340 ? 3 : 3;
-    const maxParticles = stageBounds.width < 340 ? 420 : 860;
+    const step = stageBounds.width < 340 ? 2.4 : 2;
+    const maxParticles = stageBounds.width < 340 ? 1050 : 2300;
     const dust = [];
+    let eligiblePixels = 0;
 
-    for (let y = 0; y < sampleHeight && dust.length < maxParticles; y += step) {
-      for (let x = 0; x < sampleWidth && dust.length < maxParticles; x += step) {
-        const offset = (y * sampleWidth + x) * 4;
+    dissolveLayer = document.createElement('canvas');
+    dissolveLayer.width = Math.ceil(stageBounds.width);
+    dissolveLayer.height = Math.ceil(stageBounds.height);
+    const layerContext = dissolveLayer.getContext('2d');
+    const splitY = rect.top + rect.height * .5;
+    layerContext.save();
+    layerContext.beginPath();
+    layerContext.rect(rect.left, rect.top - 2, rect.width, rect.height * .5 + 2);
+    layerContext.clip();
+    layerContext.drawImage(art, rect.left, rect.top - 2, rect.width, rect.height);
+    layerContext.restore();
+    layerContext.save();
+    layerContext.beginPath();
+    layerContext.rect(rect.left, splitY + 2, rect.width, rect.height * .5);
+    layerContext.clip();
+    layerContext.drawImage(art, rect.left, rect.top + 2, rect.width, rect.height);
+    layerContext.restore();
+
+    dissolveCells = [];
+    const erodeStep = stageBounds.width < 340 ? 2.8 : 2.4;
+    for (let y = 0; y < sampleHeight; y += erodeStep) {
+      for (let x = 0; x < sampleWidth; x += erodeStep) {
+        const sampleX = Math.min(sampleWidth - 1, Math.round(x));
+        const sampleY = Math.min(sampleHeight - 1, Math.round(y));
+        const offset = (sampleY * sampleWidth + sampleX) * 4;
+        const brightness = Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+        if (brightness < 22) continue;
+        const centerDistance = Math.abs(y / sampleHeight - .5) * 2;
+        const cellSize = randomBetween(erodeStep * .82, erodeStep * 1.48);
+        dissolveCells.push({
+          x: rect.left + x - cellSize * .5,
+          y: rect.top + y + (y < sampleHeight * .5 ? -2 : 2) - cellSize * .5,
+          size: cellSize,
+          eraseAt: randomBetween(280, 1250) + centerDistance * 120
+        });
+      }
+    }
+    dissolveCells.sort((a, b) => a.eraseAt - b.eraseAt);
+    dissolveCursor = 0;
+    dissolveStartedAt = now;
+
+    for (let y = 0; y < sampleHeight; y += step) {
+      for (let x = 0; x < sampleWidth; x += step) {
+        const sampleX = Math.min(sampleWidth - 1, Math.round(x));
+        const sampleY = Math.min(sampleHeight - 1, Math.round(y));
+        const offset = (sampleY * sampleWidth + sampleX) * 4;
         const red = pixels[offset];
         const green = pixels[offset + 1];
         const blue = pixels[offset + 2];
         const brightness = Math.max(red, green, blue);
-        if (brightness < 18 || Math.random() > .6) continue;
-        const sweep = randomBetween(0, 520) + (1 - y / sampleHeight) * 90;
-        const accent = red > green * 1.28 && red > 58;
-        const soft = !accent && dust.length % 13 === 0;
-        const chunk = !soft && dust.length % 9 === 0;
-        const gray = Math.round(Math.max(88, Math.min(224, brightness * randomBetween(.82, 1.18))));
-        const powderOpacity = randomBetween(.52, .9) * Math.max(.42, Math.min(1, brightness / 168));
-        dust.push({
+        if (brightness < 24 || Math.random() > .64) continue;
+        eligiblePixels += 1;
+        const centerDistance = Math.abs(y / sampleHeight - .5) * 2;
+        const chunk = eligiblePixels % 11 === 0;
+        const splitOffset = y < sampleHeight * .5 ? -2 : 2;
+        const particle = {
           x: rect.left + x,
-          y: rect.top + y,
-          vx: randomBetween(chunk ? -19 : -11, chunk ? 19 : 11),
-          vy: randomBetween(chunk ? -31 : -22, chunk ? 10 : 6),
-          gravity: randomBetween(-6, 4),
-          birth: now + sweep + randomBetween(0, 190),
-          life: randomBetween(880, 1580),
-          size: soft ? randomBetween(4.2, 9.4) : (chunk ? randomBetween(2.8, 5.2) : randomBetween(.8, 2.7)),
+          y: rect.top + y + splitOffset,
+          vx: randomBetween(chunk ? -18 : -10, chunk ? 18 : 10),
+          vy: randomBetween(chunk ? -29 : -20, chunk ? 10 : 6),
+          gravity: randomBetween(-7, 5),
+          birth: now + randomBetween(90, 760) + centerDistance * 210,
+          life: randomBetween(960, 1720),
+          size: chunk ? randomBetween(2.5, 4.8) : randomBetween(.75, 2.2),
           rotation: randomBetween(0, Math.PI),
-          spin: soft ? randomBetween(-.8, .8) : randomBetween(-5.2, 5.2),
-          color: accent ? (Math.random() > .5 ? '#ff4d43' : '#f2a05d') : `rgb(${gray},${gray},${gray})`,
-          opacity: soft ? randomBetween(.12, .24) : (chunk ? randomBetween(.72, .98) : powderOpacity),
-          fadePower: soft ? randomBetween(.8, 1.25) : randomBetween(1.1, 1.9),
-          glow: accent ? 3 : 0,
-          soft,
-          blur: soft ? randomBetween(2.2, 4.2) : 0
-        });
+          spin: randomBetween(-5.2, 5.2),
+          color: `rgb(${red},${green},${blue})`,
+          opacity: chunk ? randomBetween(.76, .98) : randomBetween(.56, .9),
+          fadePower: randomBetween(1.08, 1.82),
+          glow: 0
+        };
+
+        if (dust.length < maxParticles) {
+          dust.push(particle);
+        } else {
+          const replacement = Math.floor(Math.random() * eligiblePixels);
+          if (replacement < maxParticles) dust[replacement] = particle;
+        }
       }
+    }
+
+    const smokeCount = stageBounds.width < 340 ? 34 : 64;
+    for (let index = 0; index < smokeCount; index += 1) {
+      const along = randomBetween(.02, .98);
+      dust.push({
+        x: rect.left + rect.width * along,
+        y: rect.top + rect.height * randomBetween(.18, .82),
+        vx: randomBetween(-9, 9),
+        vy: randomBetween(-21, -7),
+        gravity: randomBetween(-5, 0),
+        birth: now + randomBetween(360, 1160),
+        life: randomBetween(1050, 1880),
+        size: randomBetween(4.4, 10.5),
+        rotation: 0,
+        spin: 0,
+        color: Math.random() > .86 ? '#7d2526' : '#77777a',
+        opacity: randomBetween(.07, .17),
+        fadePower: randomBetween(.8, 1.25),
+        glow: 0,
+        soft: true,
+        blur: randomBetween(2.5, 4.6)
+      });
+    }
+
+    const emberCount = stageBounds.width < 340 ? 18 : 34;
+    for (let index = 0; index < emberCount; index += 1) {
+      dust.push({
+        x: rect.left + rect.width * randomBetween(.04, .96),
+        y: rect.top + rect.height * .5 + randomBetween(-2, 2),
+        vx: randomBetween(-15, 15),
+        vy: randomBetween(-28, 18),
+        gravity: randomBetween(2, 14),
+        birth: now + randomBetween(70, 640),
+        life: randomBetween(680, 1180),
+        size: randomBetween(.7, 2),
+        rotation: randomBetween(0, Math.PI),
+        spin: randomBetween(-7, 7),
+        color: Math.random() > .32 ? '#ff4438' : '#f6b078',
+        opacity: randomBetween(.52, .9),
+        fadePower: 1.7,
+        glow: 4
+      });
     }
 
     addParticles(dust);
@@ -652,6 +773,9 @@ function initKineticHeader() {
     if (frameId) window.cancelAnimationFrame(frameId);
     frameId = 0;
     particles = [];
+    dissolveLayer = null;
+    dissolveCells = [];
+    dissolveCursor = 0;
     context.clearRect(0, 0, stageBounds.width, stageBounds.height);
     stage.classList.remove('is-entering', 'is-impacting', 'is-laser', 'is-split', 'is-dissolving');
   }
@@ -660,50 +784,53 @@ function initKineticHeader() {
     if (document.hidden || reducedMotion.matches) return;
     clearTimers();
     particles = [];
+    dissolveLayer = null;
+    dissolveCells = [];
+    dissolveCursor = 0;
     context.clearRect(0, 0, stageBounds.width, stageBounds.height);
     stage.classList.remove('is-reduced', 'is-entering', 'is-impacting', 'is-laser', 'is-split', 'is-dissolving');
     setPhrase(phrases[phraseIndex]);
-    stage.dataset.phase = 'drop';
+    markPhase('drop');
     void stage.offsetWidth;
     stage.classList.add('is-entering');
 
     schedule(() => {
-      stage.dataset.phase = 'impact';
+      markPhase('impact');
       stage.classList.add('is-impacting');
       spawnImpactDust();
       schedule(() => stage.classList.remove('is-impacting'), 720);
     }, 700);
 
     schedule(() => {
-      stage.dataset.phase = 'laser';
+      markPhase('laser');
       stage.classList.add('is-laser');
       spawnLaserSparks();
-      schedule(() => stage.classList.remove('is-laser'), 920);
-    }, 1570);
+      schedule(() => stage.classList.remove('is-laser'), 900);
+    }, 1600);
 
     schedule(() => {
-      stage.dataset.phase = 'split';
+      markPhase('split');
       stage.classList.add('is-split');
-    }, 2020);
+    }, 2600);
 
     schedule(() => {
-      stage.dataset.phase = 'dust';
+      markPhase('dust');
+      spawnTextDust();
       stage.classList.remove('is-entering');
       stage.classList.add('is-dissolving');
-      spawnTextDust();
-    }, 2820);
+    }, 3420);
 
     schedule(() => {
       phraseIndex = (phraseIndex + 1) % phrases.length;
       runCycle();
-    }, 5020);
+    }, 6350);
   }
 
   function syncMotionPreference() {
     stopSequence();
     if (reducedMotion.matches) {
       setPhrase(phrases[0]);
-      stage.dataset.phase = 'static';
+      markPhase('static');
       stage.classList.add('is-reduced');
       return;
     }
