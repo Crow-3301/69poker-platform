@@ -534,7 +534,8 @@ function initKineticHeader() {
         context.arc(0, 0, particle.size, 0, Math.PI * 2);
         context.fill();
       } else {
-        context.fillRect(-particle.size * .5, -particle.size * .5, particle.size, particle.size);
+        const stretch = particle.stretch || 1;
+        context.fillRect(-particle.size * stretch * .5, -particle.size * .5, particle.size * stretch, particle.size);
       }
       context.restore();
       active.push(particle);
@@ -586,27 +587,28 @@ function initKineticHeader() {
   function spawnLaserSparks() {
     const rect = relativeGlyphRect();
     const now = performance.now();
-    const count = stageBounds.width < 340 ? 24 : 42;
+    const count = stageBounds.width < 340 ? 30 : 58;
     const sparks = Array.from({ length: count }, (_, index) => {
       const position = randomBetween(.08, .92);
       const x = rect.left + rect.width * position;
       const y = rect.top + rect.height * .52 + randomBetween(-1.5, 1.5);
-      const hot = index % 5 === 0;
+      const hot = index % 4 === 0;
       return {
         x,
         y,
-        vx: randomBetween(16, 74) * (Math.random() > .18 ? 1 : -1),
-        vy: randomBetween(-62, 48),
+        vx: randomBetween(26, 96) * (Math.random() > .16 ? 1 : -1),
+        vy: randomBetween(-72, 56),
         gravity: randomBetween(4, 24),
-        birth: now + position * 380 + randomBetween(-35, 65),
-        life: randomBetween(360, 760),
+        birth: now + position * 340 + randomBetween(-40, 55),
+        life: randomBetween(420, 860),
         size: randomBetween(.8, hot ? 3.1 : 2.1),
-        rotation: randomBetween(-.8, .8),
-        spin: randomBetween(-8, 8),
+        stretch: randomBetween(hot ? 3.8 : 2.2, hot ? 7.2 : 4.8),
+        rotation: randomBetween(-.34, .34),
+        spin: randomBetween(-5, 5),
         color: hot ? '#fff4e9' : (index % 3 ? '#ff483d' : '#f39b55'),
         opacity: randomBetween(.62, 1),
         fadePower: 1.7,
-        glow: hot ? 7 : 4
+        glow: hot ? 10 : 6
       };
     });
     addParticles(sparks);
@@ -791,40 +793,27 @@ function initKineticHeader() {
     context.clearRect(0, 0, stageBounds.width, stageBounds.height);
     stage.classList.remove('is-reduced', 'is-entering', 'is-impacting', 'is-laser', 'is-split', 'is-dissolving');
     setPhrase(phrases[phraseIndex]);
-    markPhase('drop');
+    markPhase('reveal');
     void stage.offsetWidth;
     stage.classList.add('is-entering');
-
-    schedule(() => {
-      markPhase('impact');
-      stage.classList.add('is-impacting');
-      spawnImpactDust();
-      schedule(() => stage.classList.remove('is-impacting'), 720);
-    }, 700);
 
     schedule(() => {
       markPhase('laser');
       stage.classList.add('is-laser');
       spawnLaserSparks();
-      schedule(() => stage.classList.remove('is-laser'), 900);
+      schedule(() => stage.classList.remove('is-laser'), 940);
     }, 1600);
 
     schedule(() => {
-      markPhase('split');
-      stage.classList.add('is-split');
-    }, 2600);
-
-    schedule(() => {
-      markPhase('dust');
-      spawnTextDust();
+      markPhase('darken');
       stage.classList.remove('is-entering');
       stage.classList.add('is-dissolving');
-    }, 3420);
+    }, 2580);
 
     schedule(() => {
       phraseIndex = (phraseIndex + 1) % phrases.length;
       runCycle();
-    }, 6350);
+    }, 5250);
   }
 
   function syncMotionPreference() {

@@ -226,8 +226,8 @@ svg { display: block; width: 1.15em; height: 1.15em; }
   place-items: center;
   overflow: hidden;
   --kinetic-fast: 180ms;
-  --kinetic-drop: 1050ms;
-  --kinetic-dust: 2200ms;
+  --kinetic-reveal: 1500ms;
+  --kinetic-darken: 2200ms;
   --kinetic-enter: cubic-bezier(.16,.84,.24,1);
   --kinetic-exit: cubic-bezier(.5,0,.9,.42);
 }
@@ -243,6 +243,20 @@ svg { display: block; width: 1.15em; height: 1.15em; }
     radial-gradient(ellipse at 50% 67%, rgba(225,25,38,.16), transparent 61%),
     radial-gradient(ellipse at 50% 48%, rgba(255,255,255,.055), transparent 68%);
 }
+.kinetic-stage::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 6;
+  width: 98%;
+  height: 38px;
+  pointer-events: none;
+  content: "";
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(255,255,244,.7) 0, rgba(255,63,43,.42) 4%, rgba(225,25,38,.18) 18%, transparent 67%);
+  filter: blur(3px);
+  transform: translate(-50%,-50%) scaleX(.08);
+}
 .kinetic-particles { position: absolute; inset: 0; z-index: 8; width: 100%; height: 100%; pointer-events: none; }
 .kinetic-word {
   position: relative;
@@ -255,7 +269,8 @@ svg { display: block; width: 1.15em; height: 1.15em; }
   transform-origin: 50% 88%;
   will-change: transform, opacity, filter;
 }
-.kinetic-art { position: absolute; inset: 0; display: block; width: 100%; max-width: none; height: 100%; object-fit: contain; object-position: center; mix-blend-mode: screen; filter: drop-shadow(0 8px 7px rgba(0,0,0,.8)); }
+.kinetic-art { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; max-width: none; height: 100%; object-fit: contain; object-position: center; mix-blend-mode: screen; filter: drop-shadow(0 8px 7px rgba(0,0,0,.8)); }
+.kinetic-word::before { position: absolute; top: 50%; right: 1%; left: 1%; z-index: 2; height: 2px; pointer-events: none; content: ""; opacity: 0; background: linear-gradient(90deg, transparent, rgba(255,44,30,.72) 8%, #fff9e8 48%, rgba(255,44,30,.72) 92%, transparent); box-shadow: 0 0 5px #fff7df, 0 0 13px #ff2e20, 0 0 24px rgba(225,25,38,.84); transform: scaleX(.05); }
 .kinetic-glyph { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .kinetic-split {
   position: absolute;
@@ -287,10 +302,12 @@ svg { display: block; width: 1.15em; height: 1.15em; }
 .kinetic-stage.is-split .kinetic-split-half.is-top { animation: kinetic-split-top 480ms var(--kinetic-enter) both; }
 .kinetic-stage.is-split .kinetic-split-half.is-bottom { animation: kinetic-split-bottom 480ms var(--kinetic-enter) both; }
 .kinetic-stage.is-dissolving .kinetic-split { visibility: hidden; opacity: 0; animation: none; }
-.kinetic-stage.is-entering .kinetic-word { animation: kinetic-rock-drop var(--kinetic-drop) var(--kinetic-enter) both; }
+.kinetic-stage.is-entering .kinetic-word { animation: kinetic-dark-reveal var(--kinetic-reveal) cubic-bezier(.2,.72,.22,1) both; }
 .kinetic-stage.is-impacting .kinetic-word { filter: brightness(1.24) drop-shadow(0 8px 11px rgba(225,25,38,.22)); }
 .kinetic-stage.is-laser .kinetic-art { animation: kinetic-art-heat 820ms cubic-bezier(.18,.72,.2,1) both; }
-.kinetic-stage.is-dissolving .kinetic-word { animation: kinetic-word-dissolve var(--kinetic-dust) var(--kinetic-exit) both; }
+.kinetic-stage.is-laser::after { animation: kinetic-laser-bloom 860ms cubic-bezier(.12,.6,.18,1) both; }
+.kinetic-stage.is-laser .kinetic-word::before { animation: kinetic-cut-afterglow 860ms cubic-bezier(.12,.6,.18,1) both; }
+.kinetic-stage.is-dissolving .kinetic-word { animation: kinetic-word-darken var(--kinetic-darken) cubic-bezier(.4,0,.72,.2) both; }
 .kinetic-laser {
   position: absolute;
   top: 50%;
@@ -298,24 +315,24 @@ svg { display: block; width: 1.15em; height: 1.15em; }
   z-index: 7;
   display: block;
   width: 98%;
-  height: 3px;
+  height: 4px;
   opacity: 0;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent 0 2%, rgba(255,49,31,.65) 8%, #ff2a20 31%, #fff8df 49%, #ff2c20 69%, rgba(255,48,31,.7) 92%, transparent 98%);
-  box-shadow: 0 0 2px #fff7dd, 0 0 8px #ff2f20, 0 0 19px rgba(255,35,26,.94), 0 0 34px rgba(225,25,38,.7);
+  background: linear-gradient(90deg, transparent 0 1%, rgba(255,49,31,.76) 7%, #ff2a20 27%, #fffef1 46%, #fff 50%, #fff7dc 54%, #ff2c20 73%, rgba(255,48,31,.8) 94%, transparent 99%);
+  box-shadow: 0 0 2px #fff, 0 0 7px #fff2d4, 0 0 13px #ff2f20, 0 0 28px rgba(255,35,26,.98), 0 0 52px rgba(225,25,38,.8);
   transform: translate3d(-126%,0,0) scaleX(.42);
   transform-origin: center;
   will-change: transform, opacity;
 }
 .kinetic-laser::before {
   position: absolute;
-  inset: -11px 0;
+  inset: -19px 0;
   content: "";
-  opacity: .72;
-  background: linear-gradient(90deg, transparent, rgba(255,45,28,.08) 13%, rgba(255,55,32,.46) 50%, rgba(255,45,28,.08) 87%, transparent);
-  filter: blur(3px);
+  opacity: .9;
+  background: linear-gradient(90deg, transparent, rgba(255,45,28,.1) 10%, rgba(255,92,61,.55) 48%, rgba(255,255,240,.22) 50%, rgba(255,45,28,.1) 90%, transparent);
+  filter: blur(5px);
 }
-.kinetic-laser::after { position: absolute; top: -1px; right: 0; left: 0; height: 1px; content: ""; background: repeating-linear-gradient(93deg, transparent 0 9px, #fff4dd 10px 12px, #ff321f 13px 19px, transparent 21px 28px); filter: drop-shadow(0 0 4px #ff261a); }
+.kinetic-laser::after { position: absolute; top: 1px; right: 0; left: 0; height: 1px; content: ""; background: repeating-linear-gradient(93deg, transparent 0 7px, #fff 8px 11px, #fff4dd 12px 14px, #ff321f 15px 21px, transparent 23px 28px); filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 9px #ff261a); }
 .kinetic-laser i {
   --spark-y: -17px;
   --spark-r: 36deg;
@@ -854,14 +871,13 @@ kbd { padding: 2px 5px; border: 1px solid #29292e; color: #626269; background: #
 @keyframes brand-title-live { 0%,100% { opacity: .82; transform: translateX(0); text-shadow: 0 0 12px rgba(225,25,38,.18); } 42% { opacity: 1; transform: translateX(3px); text-shadow: 0 0 24px rgba(225,25,38,.52); } 50% { opacity: .64; transform: translateX(-2px); } 58% { opacity: 1; transform: translateX(0); } }
 @keyframes brand-copy-breathe { 0%,100% { opacity: .38; letter-spacing: 2.7px; } 50% { opacity: .86; letter-spacing: 3.5px; } }
 @keyframes brand-beam-cross { 0%, 8% { left: -35%; opacity: 0; } 20% { opacity: .7; } 48%, 100% { left: 120%; opacity: 0; } }
-@keyframes kinetic-rock-drop {
-  0% { opacity: 0; transform: translate3d(0,-112px,0) scale(.86,1.18); filter: blur(4px) brightness(.62); }
-  18% { opacity: .84; }
-  57% { opacity: 1; transform: translate3d(0,-15px,0) scale(.96,1.04); filter: blur(.7px) brightness(.9); }
-  69% { transform: translate3d(0,7px,0) scale(1.09,.76); filter: blur(0) brightness(1.65); }
-  79% { transform: translate3d(0,-6px,0) scale(.98,1.08); filter: brightness(1.16); }
-  88% { transform: translate3d(0,2px,0) scale(1.02,.95); }
-  100% { opacity: 1; transform: translate3d(0,0,0) scale(1); filter: brightness(1); }
+@keyframes kinetic-dark-reveal {
+  0% { opacity: 0; transform: none; filter: brightness(0) contrast(1.55) saturate(.2); }
+  18% { opacity: .1; transform: none; filter: brightness(.08) contrast(1.5) saturate(.3); }
+  42% { opacity: .34; transform: none; filter: brightness(.25) contrast(1.4) saturate(.48); }
+  68% { opacity: .7; transform: none; filter: brightness(.58) contrast(1.25) saturate(.72); }
+  86% { opacity: .92; transform: none; filter: brightness(.86) contrast(1.1) saturate(.92); }
+  100% { opacity: 1; transform: none; filter: brightness(1) contrast(1) saturate(1); }
 }
 @keyframes kinetic-impact-wave {
   0% { opacity: 0; transform: translateX(-50%) scaleX(.04); }
@@ -871,27 +887,42 @@ kbd { padding: 2px 5px; border: 1px solid #29292e; color: #626269; background: #
 }
 @keyframes kinetic-laser-cross {
   0% { opacity: 0; transform: translate3d(-126%,0,0) scaleX(.42); }
-  10% { opacity: 1; }
-  38% { opacity: 1; transform: translate3d(0,0,0) scaleX(1.04); }
-  68% { opacity: 1; transform: translate3d(0,0,0) scaleX(1.04); }
-  78% { opacity: .92; }
+  8% { opacity: 1; }
+  34% { opacity: 1; transform: translate3d(0,0,0) scaleX(1.06); }
+  66% { opacity: 1; transform: translate3d(0,0,0) scaleX(1.06); }
+  78% { opacity: .96; }
   100% { opacity: 0; transform: translate3d(126%,0,0) scaleX(.44); }
+}
+@keyframes kinetic-laser-bloom {
+  0% { opacity: 0; transform: translate(-50%,-50%) scaleX(.05); }
+  14% { opacity: .32; }
+  38% { opacity: .96; transform: translate(-50%,-50%) scaleX(1.04); }
+  65% { opacity: .76; transform: translate(-50%,-50%) scaleX(1.02); }
+  100% { opacity: 0; transform: translate(-50%,-50%) scaleX(1.14); }
+}
+@keyframes kinetic-cut-afterglow {
+  0% { opacity: 0; transform: scaleX(.04); }
+  24% { opacity: .25; }
+  43% { opacity: 1; transform: scaleX(1); }
+  67% { opacity: .82; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1.04); }
 }
 @keyframes kinetic-laser-spark {
   0% { opacity: 0; transform: translate3d(0,0,0) rotate(var(--spark-r)) scaleX(.15); }
   22% { opacity: 1; }
   100% { opacity: 0; transform: translate3d(15px,var(--spark-y),0) rotate(var(--spark-r)) scaleX(1.3); }
 }
-@keyframes kinetic-art-heat { 0%,100% { filter: drop-shadow(0 8px 7px rgba(0,0,0,.8)) brightness(1); } 48% { filter: drop-shadow(0 0 7px rgba(255,44,31,.78)) drop-shadow(0 8px 7px rgba(0,0,0,.8)) brightness(1.3) contrast(1.08); } }
+@keyframes kinetic-art-heat { 0%,100% { filter: drop-shadow(0 8px 7px rgba(0,0,0,.8)) brightness(1); } 46% { filter: drop-shadow(0 0 4px rgba(255,255,238,.92)) drop-shadow(0 0 13px rgba(255,44,31,.96)) drop-shadow(0 8px 7px rgba(0,0,0,.8)) brightness(1.62) contrast(1.16); } }
 @keyframes kinetic-split-reveal { from, to { opacity: 1; } }
 @keyframes kinetic-split-top { 0%,18% { transform: translate3d(0,0,0); } 100% { transform: translate3d(0,-2px,0); } }
 @keyframes kinetic-split-bottom { 0%,18% { transform: translate3d(0,0,0); } 100% { transform: translate3d(0,2px,0); } }
 @keyframes kinetic-cut-ember { 0% { opacity: 0; transform: scaleX(.08); } 22% { opacity: 1; } 68% { opacity: .82; transform: scaleX(1.01); } 100% { opacity: .42; transform: scaleX(.99); } }
-@keyframes kinetic-word-dissolve {
-  0%, 9% { opacity: 1; transform: none; filter: brightness(1); }
-  36% { opacity: .74; transform: none; filter: brightness(1.14) contrast(1.12); }
-  64% { opacity: .26; transform: none; filter: brightness(.7) blur(.7px); }
-  100% { opacity: 0; transform: none; filter: brightness(.4) blur(2px); }
+@keyframes kinetic-word-darken {
+  0%, 8% { opacity: 1; transform: none; filter: brightness(1) contrast(1) saturate(1); }
+  34% { opacity: .86; transform: none; filter: brightness(.7) contrast(1.12) saturate(.78); }
+  62% { opacity: .54; transform: none; filter: brightness(.36) contrast(1.28) saturate(.48); }
+  82% { opacity: .22; transform: none; filter: brightness(.13) contrast(1.42) saturate(.22); }
+  100% { opacity: 0; transform: none; filter: brightness(0) contrast(1.55) saturate(0); }
 }
 
 @media (max-width: 1440px) {
