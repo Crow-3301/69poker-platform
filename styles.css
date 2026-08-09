@@ -120,14 +120,16 @@ svg { display: block; width: 1.15em; height: 1.15em; }
   width: 184px;
   height: 184px;
   flex: 0 0 auto;
-  overflow: hidden;
-  border: 1px solid rgba(225,25,38,.32);
+  perspective: 760px;
   border-radius: 50%;
-  background: #030304;
-  box-shadow: 0 0 28px rgba(225,25,38,.14), inset 0 0 22px rgba(0,0,0,.72);
+  transform-style: preserve-3d;
 }
-.brand-emblem::after { position: absolute; inset: 5px; border: 1px solid rgba(255,255,255,.09); border-radius: inherit; pointer-events: none; content: ""; border-right-color: rgba(255,59,69,.74); box-shadow: 0 0 16px rgba(225,25,38,.12); }
-.brand-emblem img { width: 100%; max-width: none; height: 100%; border-radius: inherit; object-fit: cover; will-change: transform; animation: brand-emblem-spin 16s linear infinite; }
+.brand-emblem::after { position: absolute; inset: 4%; z-index: -1; border-radius: inherit; pointer-events: none; content: ""; background: rgba(225,25,38,.08); box-shadow: 0 0 30px rgba(225,25,38,.22); filter: blur(7px); }
+.brand-coin { position: absolute; inset: 0; display: block; border-radius: inherit; transform-style: preserve-3d; will-change: transform; animation: brand-coin-turn 8.8s cubic-bezier(.48,.04,.22,.98) infinite; }
+.brand-coin-face { position: absolute; inset: 0; display: block; width: 100%; max-width: none; height: 100%; border: 1px solid rgba(225,25,38,.34); border-radius: inherit; object-fit: cover; backface-visibility: hidden; box-shadow: 0 0 25px rgba(225,25,38,.14), inset 0 0 22px rgba(0,0,0,.74); }
+.brand-coin-face.is-front { transform: translateZ(3px); }
+.brand-coin-face.is-back { filter: brightness(.8) saturate(.92); transform: rotateY(180deg) translateZ(3px); }
+.brand-coin-edge { position: absolute; top: 3%; bottom: 3%; left: 50%; display: block; width: 7px; border: 1px solid rgba(255,92,98,.55); border-radius: 50%; background: linear-gradient(90deg,#2b0306,#ff3540 36%,#791018 67%,#09090b); box-shadow: inset 1px 0 2px rgba(255,255,255,.5), 0 0 9px rgba(225,25,38,.56); transform: translateX(-50%) rotateY(90deg); }
 .brand-wordmark { width: 204px; height: 42px; flex: 0 0 auto; pointer-events: none; }
 .brand-wordmark img { width: 100%; max-width: none; height: 100%; object-fit: contain; filter: drop-shadow(0 0 9px rgba(225,25,38,.16)); }
 .brand-copy { position: absolute !important; right: 0; left: 0; justify-items: center; pointer-events: none; text-align: center; }
@@ -831,7 +833,7 @@ kbd { padding: 2px 5px; border: 1px solid #29292e; color: #626269; background: #
 @keyframes brand-signal-sweep { 0%, 14% { opacity: 0; transform: translateX(-42%); } 26%, 58% { opacity: 1; } 72%, 100% { opacity: 0; transform: translateX(42%); } }
 @keyframes brand-line-run { 0%, 12% { opacity: 0; transform: translateX(-100%); } 28%, 65% { opacity: 1; } 82%, 100% { opacity: 0; transform: translateX(100%); } }
 @keyframes brand-mark-breathe { 0%, 100% { border-color: rgba(225,25,38,.28); box-shadow: 0 0 20px rgba(225,25,38,.12); } 50% { border-color: rgba(255,59,69,.56); box-shadow: 0 0 34px rgba(225,25,38,.26); } }
-@keyframes brand-emblem-spin { to { transform: rotate(360deg); } }
+@keyframes brand-coin-turn { 0%,16% { transform: rotateY(0deg); } 42%,58% { transform: rotateY(180deg); } 84%,100% { transform: rotateY(360deg); } }
 @keyframes brand-logo-drift { 0%, 100% { transform: scale(1.42) rotate(0deg); } 50% { transform: scale(1.49) rotate(-1.6deg); } }
 @keyframes brand-corner-flip { 0%,12% { transform: rotateY(0deg); filter: brightness(.92); } 48%,62% { transform: rotateY(180deg); filter: brightness(1.25); } 100% { transform: rotateY(360deg); filter: brightness(.92); } }
 @keyframes brand-nine-relief { 0%,100% { opacity: .78; } 50% { opacity: 1; } }
@@ -1057,6 +1059,6 @@ kbd { padding: 2px 5px; border: 1px solid #29292e; color: #626269; background: #
   .kinetic-stage.is-reduced .kinetic-impact { display: none; }
   .motion-beam { display: none; }
   .digit-body { opacity: 1 !important; transform: none !important; filter: none !important; }
-  .brand-emblem img { animation: none !important; }
+  .brand-coin { animation: none !important; transform: none !important; }
   .drop-trails, .impact-wave, .impact-cracks, .impact-shards { display: none; }
 }
