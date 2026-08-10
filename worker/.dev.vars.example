@@ -1,0 +1,5 @@
+CLOUDFLARE_ACCOUNT_ID=your_account_id
+CLOUDFLARE_API_TOKEN=your_stream_api_token
+CLOUDFLARE_CUSTOMER_CODE=your_stream_customer_code
+ADMIN_PASSWORD=choose_a_strong_password
+SESSION_SECRET=generate_a_long_random_secret

@@ -1,6 +1,12 @@
 const $ = (selector, context = document) => context.querySelector(selector);
 const $$ = (selector, context = document) => [...context.querySelectorAll(selector)];
 
+const LIVE_API_BASE = document.querySelector('meta[name="live-api-base"]')?.content.replace(/\/$/, '') || '';
+const STUDIO_SESSION_KEY = '69poker_studio_session';
+let studioPollTimer = 0;
+let publicLivePollTimer = 0;
+let studioCredentials = null;
+
 const icons = {
   home: '<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.7\'><path d=\'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3Z\'/></svg>',
   live: '<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.7\'><circle cx=\'12\' cy=\'12\' r=\'3\'/><path d=\'M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8\'/></svg>',
@@ -143,6 +149,10 @@ function renderWatch(type) {
   return `<div class='page'>${pageHeader(kicker, member ? '會員<em>頻道</em>' : high ? '高額桌<em>直播</em>' : '官方<em>直播</em>', member ? '觀看會員實況主的教學、覆盤與娛樂內容，並可追蹤頻道。' : '同步賽事影像、數據與聊天室，掌握每一個關鍵時刻。')}<div class='watch-layout'><div><section class='video-player'><img src='${image}' alt='${title} 直播畫面'><div class='video-overlay'><div class='video-top'><span class='live-badge'>LIVE · ${viewers}</span><span class='status'>1080P · AUTO</span></div><div><div class='video-bottom'><div class='video-title'><p class='eyebrow'>${kicker}</p><h1>${title}</h1></div><div class='controls'><button class='control-button' data-action='play' aria-label='播放或暫停'><span data-icon='play'></span></button><button class='control-button' data-action='volume' aria-label='音量'>VOL</button><button class='control-button' data-action='fullscreen' aria-label='全螢幕'>⛶</button></div></div><div class='progress'><i></i></div></div></div></section><section class='panel watch-info'><div class='panel-body'><div class='channel-line'><span class='avatar'>${member ? 'RM' : high ? 'HS' : '69'}</span><div><h2>${channel}</h2><p>${member ? '24.8K 追蹤者 · 撲克教學 / 牌局覆盤' : '官方認證頻道 · 賽事資料同步'}</p></div></div><div class='interaction-buttons'><button class='button ghost small' data-action='favorite'><span data-icon='bookmark'></span> 收藏</button><button class='button primary small' data-action='follow'>${member ? '追蹤頻道' : '追蹤賽事'}</button></div></div></section><section class='content-section'><div class='section-title'><div><h2>KEY <span>MOMENTS</span></h2><p>${member ? '實況主標記的教學段落' : '賽事時間軸與精彩重播'}</p></div></div><div class='timeline'><div class='timeline-item'><time>19:42:18</time><p>${member ? '翻牌圈尺度選擇：為何不做持續下注' : 'Lucas Jumalon 贏下 92M 關鍵底池'}</p><span>重播 02:14</span></div><div class='timeline-item'><time>19:31:06</time><p>${high ? '河牌全下，底池超過 $420K' : 'Level 36 開始 · 盲注升至 750K / 1.5M'}</p><span>數據卡</span></div><div class='timeline-item'><time>19:18:44</time><p>${member ? '觀眾提問：短碼情境的範圍調整' : '第五名選手淘汰，賽事剩餘五人'}</p><span>重播 01:08</span></div></div></section></div>${chatMarkup()}</div></div>`;
 }
 
+function renderPublicLiveChannel() {
+  return `<div class='page'>${pageHeader('MEMBER CHANNEL', '會員<em>頻道</em>', 'OBS 开始推流后，频道会自动上线；停止推流后自动恢复待机。')}<div class='watch-layout'><div><section class='video-player live-stream-shell' id='public-live-shell'><div class='live-player-mount' id='public-live-player'><div class='live-offline'><span class='brand-mark'><img src='assets/six-nine-club-logo.png' alt=''></span><p class='eyebrow'>69POKER LIVE INPUT</p><h2>正在读取直播讯号</h2><p>OBS 开始推流后，这里会自动切换为直播画面。</p></div></div><span class='status preview-badge' id='public-live-badge'>CONNECTING</span></section><section class='panel watch-info'><div class='panel-body'><div class='channel-line'><span class='avatar'>69</span><div><h2 id='public-channel-title'>69 POKER LIVE GAME</h2><p id='public-channel-meta'>SIX & NINE CLUB · 等待 OBS 讯号</p></div></div><div class='interaction-buttons'><button class='button ghost small' data-action='favorite'><span data-icon='bookmark'></span> 收藏</button><button class='button primary small' data-action='follow'>追蹤頻道</button></div></div></section><section class='content-section'><div class='section-title'><div><h2>LIVE <span>SYSTEM</span></h2><p>真实串流状态</p></div></div><div class='timeline'><div class='timeline-item'><time>LIVE</time><p>频道由 Cloudflare Stream 提供自适应画质播放</p><span>AUTO</span></div><div class='timeline-item'><time>OBS</time><p>支持 H.264 影像与 AAC 音讯输入</p><span>RTMPS</span></div></div></section></div>${chatMarkup()}</div></div>`;
+}
+
 function renderCreators() {
   const creatorStreams = streamData.filter(item=>item[0] === 'creator');
   return `<div class='page'>${pageHeader('CREATOR NETWORK', '會員<em>直播</em>', '從實戰覆盤、新手教學到賽事陪看，探索平台會員建立的原創頻道。', link('/creator/apply', '申請成為實況主', 'button primary'))}<section class='creator-hero'><div class='creator-copy'><p class='eyebrow'>STREAM YOUR GAME</p><h1>YOUR TABLE.<br><span>YOUR STORY.</span></h1><p>會員直播提供內容分類、追蹤、聊天室與精彩片段工具。頻道需完成身分與內容審查，禁止下注導流、私人金流與未授權轉播。</p><div class='hero-buttons'>${link('/creator/apply', '開設我的頻道')}${link('/creator/live', '進入直播中心', 'button ghost')}</div></div><div class='creator-visual'><img src='assets/reference-dashboard.png' alt='會員直播頻道控制台'></div></section><section class='content-section'><div class='section-title'><div><h2>CREATOR <span>CHANNELS</span></h2><p>正在直播的會員頻道</p></div><div class='filters' data-filter-group><button class='filter-button active' data-filter='all'>全部</button><button class='filter-button'>德州撲克</button><button class='filter-button'>教學</button><button class='filter-button'>牌局覆盤</button></div></div><div class='card-grid'>${[...creatorStreams, ...creatorStreams, streamData[6]].map(streamCard).join('')}</div></section></div>`;
@@ -154,6 +164,10 @@ function renderCreatorApply() {
 
 function renderStudio() {
   return `<div class='page'>${pageHeader('CREATOR STUDIO', '直播<em>中心</em>', '設定頻道標題、內容分類、影像來源與串流品質；完成檢查後即可啟動展示狀態。', `<button class='button ghost' data-action='test-stream'>重新檢測</button>`)}<div class='studio-grid'><section><div class='preview-screen' id='preview-screen'><span class='status preview-badge' id='stream-status'>PREVIEW OFFLINE</span><div class='preview-corners'></div><div class='preview-placeholder'><span class='brand-mark'><img src='assets/six-nine-club-logo.png' alt=''></span><h2>69POKER CREATOR PREVIEW</h2><p>選擇影像來源後，預覽將顯示在此處</p></div></div><div class='panel content-section'><div class='panel-head'><h2>直播資訊</h2><span>AUTO SAVE</span></div><form class='panel-body form-grid' id='stream-setup-form'><div class='form-row'><div class='field'><label for='stream-title'>直播標題</label><input id='stream-title' name='title' value='晚間牌局覆盤｜觀眾提問場'></div><div class='field'><label for='stream-category'>分類</label><select id='stream-category' name='category'><option>牌局覆盤</option><option>新手教學</option><option>賽事陪看</option></select></div></div><button class='button muted' type='submit'>儲存直播設定</button></form></div></section><aside class='studio-controls'><section class='panel'><div class='panel-head'><h2>訊號檢查</h2><span id='test-time'>尚未檢測</span></div><div class='panel-body network-check' id='network-check'><div class='check-item'><span class='check-icon'>✓</span><span><b>網路連線</b><small>建議上傳 8 Mbps 以上</small></span><span>READY</span></div><div class='check-item'><span class='check-icon'>✓</span><span><b>影像來源</b><small>1920 × 1080 · 60 FPS</small></span><span>READY</span></div><div class='check-item'><span class='check-icon'>✓</span><span><b>音訊輸入</b><small>峰值 -12 dB</small></span><span>READY</span></div></div></section><section class='panel'><div class='panel-head'><h2>串流金鑰</h2><span>RTMP</span></div><div class='panel-body'><div class='stream-key'>rtmp://live.69poker.demo/member/••••••••••••</div><p class='form-note'>展示用位址，沒有真實串流服務。切勿分享正式環境的串流金鑰。</p></div></section><button class='button primary full' id='go-live-button' data-action='go-live'><span data-icon='signal'></span> 啟動展示直播</button>${link('/channel/member', '查看我的公開頻道', 'button ghost full')}</aside></div></div>`;
+}
+
+function renderLiveStudio() {
+  return `<div class='page'>${pageHeader('OBS BROADCAST CONSOLE', '直播<em>中心</em>', '输入管理密码取得专属串流密钥；把服务器与密钥贴进 OBS，按下「开始直播」即可自动上线。', `<button class='button ghost' data-action='studio-refresh'>刷新状态</button>`)}<div class='studio-grid'><section><div class='preview-screen studio-preview' id='preview-screen'><span class='status preview-badge' id='stream-status'>STUDIO LOCKED</span><div class='preview-corners'></div><div class='live-player-mount' id='studio-live-player'><div class='preview-placeholder'><span class='brand-mark'><img src='assets/six-nine-club-logo.png' alt=''></span><p class='eyebrow'>69POKER SECURE INGEST</p><h2>等待 OBS 讯号</h2><p>完成管理验证后即可取得专属 RTMPS 串流资料。</p></div></div></div><div class='panel content-section'><div class='panel-head'><h2>直播资讯</h2><span id='studio-save-state'>SECURE API</span></div><form class='panel-body form-grid' id='stream-setup-form'><div class='form-row'><div class='field'><label for='stream-title'>直播标题</label><input id='stream-title' name='title' value='69 POKER LIVE GAME' maxlength='100' disabled required></div><div class='field'><label for='stream-category'>分类</label><select id='stream-category' name='category' disabled><option>POKER LIVE</option><option>SIX & NINE CLUB</option><option>牌局覆盘</option><option>赛事陪看</option></select></div></div><button class='button muted' id='studio-save-button' type='submit' disabled>储存直播设定</button></form></div></section><aside class='studio-controls'><section class='panel studio-access-panel' id='studio-access-panel'><div class='panel-head'><h2>管理验证</h2><span>ADMIN ONLY</span></div><form class='panel-body form-grid' id='studio-login-form'><div class='field'><label for='studio-password'>直播管理密码</label><input id='studio-password' name='password' type='password' autocomplete='current-password' placeholder='输入管理密码' required></div><button class='button primary full' type='submit'><span data-icon='lock'></span> 解锁 OBS 资料</button><p class='form-note'>密码只送往安全后端验证，不会储存在浏览器或网页源码。</p></form></section><section class='panel'><div class='panel-head'><h2>讯号状态</h2><span id='test-time'>WAITING</span></div><div class='panel-body network-check' id='network-check'><div class='check-item' data-check='api'><span class='check-icon'>·</span><span><b>安全后端</b><small>Cloudflare Worker</small></span><span>LOCKED</span></div><div class='check-item' data-check='obs'><span class='check-icon'>·</span><span><b>OBS 输入</b><small>H.264 + AAC · RTMPS</small></span><span>OFFLINE</span></div><div class='check-item' data-check='player'><span class='check-icon'>·</span><span><b>公开频道</b><small>自动适应画质</small></span><span>STANDBY</span></div></div></section><section class='panel studio-credentials' id='studio-credentials' aria-disabled='true'><div class='panel-head'><h2>OBS 串流资料</h2><span>KEEP SECRET</span></div><div class='panel-body form-grid'><div class='credential-row'><label for='obs-server'>服务器</label><div class='credential-control'><input id='obs-server' value='验证后显示' readonly><button type='button' data-action='copy-stream-url' disabled>复制</button></div></div><div class='credential-row'><label for='obs-key'>串流密钥</label><div class='credential-control'><input id='obs-key' type='password' value='••••••••••••••••' readonly><button type='button' data-action='reveal-stream-key' disabled>显示</button><button type='button' data-action='copy-stream-key' disabled>复制</button></div></div><ol class='obs-steps'><li><b>OBS → 设置 → 直播</b><span>服务选择「自定义」。</span></li><li><b>贴上服务器与串流密钥</b><span>不要勾选公开或分享密钥。</span></li><li><b>按「开始直播」</b><span>约数秒后本页与公开频道自动转为 LIVE。</span></li></ol></div></section><div class='studio-primary-state' id='studio-primary-state'><span data-icon='signal'></span><div><b>等待管理验证</b><small>OBS 连接后会自动开播，无需再按网页按钮。</small></div></div>${link('/channel/member', '查看公开直播频道 →', 'button ghost full')}<button class='button text-button full' data-action='studio-logout' id='studio-logout' hidden>锁定直播资料</button></aside></div></div>`;
 }
 
 function renderCommunity() {
@@ -184,16 +198,206 @@ const renderers = {
   '/live/official': () => renderWatch('official'),
   '/live/high-stakes': () => renderWatch('high'),
   '/live/creators': renderCreators,
-  '/channel/member': () => renderWatch('member'),
+  '/channel/member': renderPublicLiveChannel,
   '/creator/apply': renderCreatorApply,
-  '/creator/live': renderStudio,
+  '/creator/live': renderLiveStudio,
   '/community': renderCommunity,
   '/rankings': renderRankings,
   '/member': renderMember,
   '/settings': renderSettings
 };
 
+function clearLivePolling() {
+  window.clearInterval(studioPollTimer);
+  window.clearInterval(publicLivePollTimer);
+  studioPollTimer = 0;
+  publicLivePollTimer = 0;
+}
+
+async function liveRequest(path, options = {}) {
+  if (!LIVE_API_BASE) throw new Error('直播后端尚未部署。');
+  const headers = new Headers(options.headers || {});
+  headers.set('Content-Type', 'application/json');
+  if (options.auth) {
+    const token = sessionStorage.getItem(STUDIO_SESSION_KEY);
+    if (!token) throw new Error('请先完成管理验证。');
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  const result = await fetch(`${LIVE_API_BASE}${path}`, { ...options, headers });
+  const payload = await result.json().catch(() => ({}));
+  if (!result.ok) {
+    const error = new Error(payload.message || '直播服务暂时无法使用。');
+    error.status = result.status;
+    throw error;
+  }
+  return payload;
+}
+
+function safePlayerUrl(value, autoplay = false) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || !url.hostname.endsWith('.cloudflarestream.com')) return '';
+    if (autoplay) {
+      url.searchParams.set('autoplay', 'true');
+      url.searchParams.set('muted', 'true');
+    }
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
+function mountStreamPlayer(mount, playerUrl, autoplay = false) {
+  if (!mount) return;
+  const source = safePlayerUrl(playerUrl, autoplay);
+  if (!source) return;
+  if (mount.dataset.playerUrl === source) return;
+  mount.dataset.playerUrl = source;
+  mount.innerHTML = `<iframe src='${source}' title='69Poker 直播播放器' allow='accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture' allowfullscreen></iframe>`;
+}
+
+function showOfflineState(mount, title, message) {
+  if (!mount || mount.dataset.offlineTitle === title) return;
+  mount.removeAttribute('data-player-url');
+  mount.dataset.offlineTitle = title;
+  mount.innerHTML = `<div class='live-offline'><span class='brand-mark'><img src='assets/six-nine-club-logo.png' alt=''></span><p class='eyebrow'>69POKER LIVE INPUT</p><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p></div>`;
+}
+
+function setStudioCheck(name, label, state = '') {
+  const item = $(`[data-check='${name}']`);
+  if (!item) return;
+  item.classList.remove('is-ready', 'is-live', 'is-error');
+  if (state) item.classList.add(`is-${state}`);
+  $('.check-icon', item).textContent = state === 'live' ? '●' : state === 'ready' ? '✓' : state === 'error' ? '!' : '·';
+  const value = $('span:last-child', item);
+  if (value) value.textContent = label;
+}
+
+function lockStudio(message = '等待管理验证') {
+  studioCredentials = null;
+  $('#studio-access-panel')?.removeAttribute('hidden');
+  $('#studio-logout')?.setAttribute('hidden', '');
+  $('#studio-credentials')?.setAttribute('aria-disabled', 'true');
+  $$('#studio-credentials button').forEach(button => { button.disabled = true; });
+  ['#stream-title', '#stream-category', '#studio-save-button'].forEach(selector => { const node = $(selector); if (node) node.disabled = true; });
+  const status = $('#stream-status');
+  if (status) { status.textContent = 'STUDIO LOCKED'; status.classList.remove('live'); }
+  const primary = $('#studio-primary-state');
+  if (primary) { $('b', primary).textContent = message; $('small', primary).textContent = 'OBS 连接后会自动开播，无需再按网页按钮。'; }
+  setStudioCheck('obs', 'OFFLINE');
+  setStudioCheck('player', 'STANDBY');
+}
+
+function updateStudio(data, includeCredentials = false) {
+  if (!$('#preview-screen')) return;
+  if (includeCredentials && data.streamKey && data.rtmpsUrl) studioCredentials = { streamKey: data.streamKey, rtmpsUrl: data.rtmpsUrl };
+  $('#studio-access-panel')?.setAttribute('hidden', '');
+  $('#studio-logout')?.removeAttribute('hidden');
+  $('#studio-credentials')?.setAttribute('aria-disabled', 'false');
+  $$('#studio-credentials button').forEach(button => { button.disabled = false; });
+  ['#stream-title', '#stream-category', '#studio-save-button'].forEach(selector => { const node = $(selector); if (node) node.disabled = false; });
+  if ($('#stream-title') && document.activeElement !== $('#stream-title')) $('#stream-title').value = data.title || '69 POKER LIVE GAME';
+  if ($('#stream-category') && document.activeElement !== $('#stream-category')) {
+    const select = $('#stream-category');
+    if (![...select.options].some(option => option.value === data.category)) select.add(new Option(data.category, data.category));
+    select.value = data.category || 'POKER LIVE';
+  }
+  if (includeCredentials && studioCredentials) {
+    $('#obs-server').value = studioCredentials.rtmpsUrl;
+    $('#obs-key').value = studioCredentials.streamKey;
+    $('#obs-key').type = 'password';
+  }
+  setStudioCheck('api', 'READY', 'ready');
+  setStudioCheck('obs', data.live ? 'LIVE' : 'OFFLINE', data.live ? 'live' : '');
+  setStudioCheck('player', data.live ? 'ON AIR' : 'STANDBY', data.live ? 'live' : 'ready');
+  const status = $('#stream-status');
+  if (status) { status.textContent = data.live ? 'LIVE · OBS CONNECTED' : 'READY · WAITING FOR OBS'; status.classList.toggle('live', data.live); }
+  const time = $('#test-time');
+  if (time) time.textContent = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const primary = $('#studio-primary-state');
+  if (primary) {
+    primary.classList.toggle('is-live', data.live);
+    $('b', primary).textContent = data.live ? '正在直播' : '已就绪，等待 OBS';
+    $('small', primary).textContent = data.live ? '公开频道正在播放此 OBS 讯号。' : '在 OBS 按下「开始直播」即可自动上线。';
+  }
+  const mount = $('#studio-live-player');
+  if (data.live && data.playerUrl) mountStreamPlayer(mount, data.playerUrl, true);
+  else showOfflineState(mount, '等待 OBS 讯号', 'OBS 开始推流后，预览会自动显示在这里。');
+}
+
+async function refreshStudio(includeCredentials = false) {
+  try {
+    const data = await liveRequest(includeCredentials ? '/api/admin/credentials' : '/api/admin/status', { auth: true });
+    updateStudio(data, includeCredentials);
+    return true;
+  } catch (error) {
+    if (error.status === 401) {
+      sessionStorage.removeItem(STUDIO_SESSION_KEY);
+      lockStudio('管理会话已失效');
+    }
+    setStudioCheck('api', 'ERROR', 'error');
+    if (includeCredentials) toast(error.message);
+    return false;
+  }
+}
+
+async function initStudio() {
+  lockStudio();
+  if (!LIVE_API_BASE) {
+    setStudioCheck('api', 'DEPLOY REQUIRED', 'error');
+    const button = $('#studio-login-form button[type=submit]');
+    if (button) button.disabled = true;
+    showOfflineState($('#studio-live-player'), '直播后端部署中', 'Cloudflare 安全接口连接完成后即可使用。');
+    return;
+  }
+  if (sessionStorage.getItem(STUDIO_SESSION_KEY)) {
+    await refreshStudio(true);
+    studioPollTimer = window.setInterval(() => refreshStudio(false), 5000);
+    return;
+  }
+  try {
+    const health = await liveRequest('/api/health');
+    setStudioCheck('api', health.configured ? 'READY' : 'SETUP REQUIRED', health.configured ? 'ready' : 'error');
+  } catch {
+    setStudioCheck('api', 'UNREACHABLE', 'error');
+  }
+}
+
+function updatePublicLive(data) {
+  if (!$('#public-live-shell')) return;
+  const badge = $('#public-live-badge');
+  const mount = $('#public-live-player');
+  if ($('#public-channel-title')) $('#public-channel-title').textContent = data.title || '69 POKER LIVE GAME';
+  if ($('#public-channel-meta')) $('#public-channel-meta').textContent = `${data.category || 'SIX & NINE CLUB'} · ${data.live ? '正在直播' : '等待 OBS 讯号'}`;
+  if (badge) { badge.textContent = data.live ? 'LIVE · ON AIR' : 'OFFLINE · STANDBY'; badge.classList.toggle('live', data.live); }
+  if (data.live && data.playerUrl) mountStreamPlayer(mount, data.playerUrl, true);
+  else showOfflineState(mount, '目前尚未开播', 'OBS 开始推流后，本页面会自动切换为直播画面。');
+}
+
+async function refreshPublicLive(showError = false) {
+  try {
+    updatePublicLive(await liveRequest('/api/public/live'));
+  } catch (error) {
+    const badge = $('#public-live-badge');
+    if (badge) badge.textContent = 'SERVICE OFFLINE';
+    showOfflineState($('#public-live-player'), '直播服务暂时离线', '请稍后重新整理页面。');
+    if (showError) toast(error.message);
+  }
+}
+
+async function initPublicLive() {
+  if (!LIVE_API_BASE) {
+    const badge = $('#public-live-badge');
+    if (badge) badge.textContent = 'DEPLOYING';
+    showOfflineState($('#public-live-player'), '直播服务部署中', '安全后端上线后，此频道即可接收 OBS 直播。');
+    return;
+  }
+  await refreshPublicLive();
+  publicLivePollTimer = window.setInterval(() => refreshPublicLive(false), 7000);
+}
+
 function render() {
+  clearLivePolling();
   const route = getRoute();
   const meta = routeMeta[route];
   document.title = `${meta[1]} · 69Poker Premium Platform`;
@@ -207,6 +411,8 @@ function render() {
   window.scrollTo({ top: 0, behavior: 'instant' });
   document.body.classList.remove('nav-open');
   $('.menu-toggle').setAttribute('aria-expanded', 'false');
+  if (route === '/creator/live') initStudio();
+  if (route === '/channel/member') initPublicLive();
 }
 
 function renderSequenceNav(route) {
@@ -288,7 +494,7 @@ function validateForm(form) {
   return valid;
 }
 
-function handleSubmit(event) {
+async function handleSubmit(event) {
   const form = event.target;
   if (!(form instanceof HTMLFormElement)) return;
   event.preventDefault();
@@ -298,7 +504,26 @@ function handleSubmit(event) {
     return;
   }
   const data = Object.fromEntries(new FormData(form).entries());
-  if (form.id === 'login-form') {
+  if (form.id === 'studio-login-form') {
+    const submit = form.querySelector('button[type=submit]');
+    submit.disabled = true;
+    submit.textContent = '验证中…';
+    try {
+      const result = await liveRequest('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: data.password }) });
+      sessionStorage.setItem(STUDIO_SESSION_KEY, result.token);
+      form.reset();
+      const ready = await refreshStudio(true);
+      if (ready) {
+        window.clearInterval(studioPollTimer);
+        studioPollTimer = window.setInterval(() => refreshStudio(false), 5000);
+        toast('OBS 串流资料已安全解锁。', 'success');
+      }
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      if (submit.isConnected) { submit.disabled = false; submit.innerHTML = `${icons.lock} 解锁 OBS 资料`; }
+    }
+  } else if (form.id === 'login-form') {
     const displayName = data.account.includes('@') ? data.account.split('@')[0] : `Member ${data.account.slice(-4)}`;
     localStorage.setItem('69poker_user', JSON.stringify({ displayName, account: data.account, mode: 'demo' }));
     toast('展示模式登入成功，正在開啟會員中心。', 'success');
@@ -318,8 +543,17 @@ function handleSubmit(event) {
     localStorage.setItem('69poker_creator_draft', JSON.stringify(data));
     toast('申請草稿已儲存在此瀏覽器，尚未送出審核。', 'success');
   } else if (form.id === 'stream-setup-form') {
-    localStorage.setItem('69poker_stream_setup', JSON.stringify(data));
-    toast('直播設定已儲存在此瀏覽器。', 'success');
+    const button = $('#studio-save-button');
+    if (button) { button.disabled = true; button.textContent = '储存中…'; }
+    try {
+      const result = await liveRequest('/api/admin/settings', { method: 'PUT', auth: true, body: JSON.stringify(data) });
+      updateStudio(result, false);
+      toast('直播资讯已同步到公开频道。', 'success');
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      if (button?.isConnected) { button.disabled = false; button.textContent = '储存直播设定'; }
+    }
   } else if (form.id === 'settings-form') {
     const user = getUser() || { mode: 'demo' };
     user.displayName = data.displayName || '69Poker Guest';
@@ -335,10 +569,37 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
-function handleAction(button) {
+async function handleAction(button) {
   const action = button.dataset.action;
   if (action === 'notifications') openNotifications();
   if (action === 'close-dialog') closeDialog();
+  if (action === 'studio-refresh') {
+    if (!sessionStorage.getItem(STUDIO_SESSION_KEY)) toast('请先完成管理验证。');
+    else if (await refreshStudio(false)) toast('直播状态已刷新。', 'success');
+  }
+  if (action === 'studio-logout') {
+    sessionStorage.removeItem(STUDIO_SESSION_KEY);
+    window.clearInterval(studioPollTimer);
+    studioPollTimer = 0;
+    lockStudio('直播资料已锁定');
+    showOfflineState($('#studio-live-player'), '等待管理验证', '解锁后可查看 OBS 串流资料与即时预览。');
+    toast('OBS 串流资料已从此页面锁定。');
+  }
+  if (action === 'reveal-stream-key' && studioCredentials) {
+    const input = $('#obs-key');
+    const reveal = input.type === 'password';
+    input.type = reveal ? 'text' : 'password';
+    button.textContent = reveal ? '隐藏' : '显示';
+  }
+  if ((action === 'copy-stream-url' || action === 'copy-stream-key') && studioCredentials) {
+    const value = action === 'copy-stream-url' ? studioCredentials.rtmpsUrl : studioCredentials.streamKey;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast(action === 'copy-stream-url' ? '服务器地址已复制。' : '串流密钥已复制，请勿分享。', 'success');
+    } catch {
+      toast('浏览器阻止自动复制，请手动选取内容。');
+    }
+  }
   if (action === 'send-code') {
     button.disabled = true;
     let seconds = 20;

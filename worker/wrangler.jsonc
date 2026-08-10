@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "69poker-live-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-10",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://69poker.club,https://www.69poker.club",
+    "CHANNEL_ID": "69poker-main"
+  }
+}
