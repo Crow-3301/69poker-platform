@@ -358,6 +358,13 @@ async function initStudio() {
   try {
     const health = await liveRequest('/api/health');
     setStudioCheck('api', health.configured ? 'READY' : 'SETUP REQUIRED', health.configured ? 'ready' : 'error');
+    if (!health.configured) {
+      const password = $('#studio-password');
+      const button = $('#studio-login-form button[type=submit]');
+      if (password) { password.disabled = true; password.placeholder = 'Cloudflare Stream 尚未完成配置'; }
+      if (button) button.disabled = true;
+      showOfflineState($('#studio-live-player'), 'Cloudflare Stream 待启用', '完成 Stream 订阅与安全密钥配置后即可解锁 OBS。');
+    }
   } catch {
     setStudioCheck('api', 'UNREACHABLE', 'error');
   }
