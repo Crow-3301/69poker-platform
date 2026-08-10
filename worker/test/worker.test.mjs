@@ -81,3 +81,12 @@ test('answers browser CORS preflight with an empty 204 response', async () => {
   assert.equal(result.headers.get('Access-Control-Allow-Origin'), 'https://69poker.club');
   assert.equal(await result.text(), '');
 });
+
+test('returns a normal offline public state before Stream secrets are configured', async () => {
+  const unconfigured = { ALLOWED_ORIGINS: 'https://69poker.club' };
+  const result = await worker.fetch(new Request('https://api.test/api/public/live'), unconfigured);
+  assert.equal(result.status, 200);
+  const payload = await result.json();
+  assert.equal(payload.configured, false);
+  assert.equal(payload.live, false);
+});

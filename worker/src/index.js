@@ -200,6 +200,13 @@ export async function handleRequest(request, env) {
     return response(request, env, { ok: true, configured: required.every(name => Boolean(env[name])) });
   }
 
+  if (url.pathname === '/api/public/live' && request.method === 'GET') {
+    const providerReady = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_CUSTOMER_CODE'].every(name => Boolean(env[name]));
+    if (!providerReady) return response(request, env, publicInput(env, null, null), 200, { 'Cache-Control': 'public, max-age=3' });
+    const input = await findInput(env);
+    return response(request, env, publicInput(env, input, input ? await lifecycle(env, input.uid) : null), 200, { 'Cache-Control': 'public, max-age=3' });
+  }
+
   assertConfigured(env);
 
   if (url.pathname === '/api/admin/login' && request.method === 'POST') {
@@ -255,11 +262,6 @@ export async function handleRequest(request, env) {
       });
       return response(request, env, publicInput(env, input, await lifecycle(env, input.uid)));
     }
-  }
-
-  if (url.pathname === '/api/public/live' && request.method === 'GET') {
-    const input = await findInput(env);
-    return response(request, env, publicInput(env, input, input ? await lifecycle(env, input.uid) : null), 200, { 'Cache-Control': 'public, max-age=3' });
   }
 
   throw new ApiError(404, 'NOT_FOUND', '找不到此接口。');
