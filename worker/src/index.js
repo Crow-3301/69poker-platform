@@ -77,7 +77,7 @@ function response(request, env, payload, status = 200, extraHeaders = {}) {
     headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'Authorization,Content-Type');
   }
-  return new Response(JSON.stringify(payload), { status, headers });
+  return new Response(status === 204 ? null : JSON.stringify(payload), { status, headers });
 }
 
 function assertConfigured(env) {

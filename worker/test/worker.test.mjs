@@ -71,3 +71,13 @@ test('rejects a wrong admin password', async () => {
   }), env);
   assert.equal(result.status, 401);
 });
+
+test('answers browser CORS preflight with an empty 204 response', async () => {
+  const result = await worker.fetch(new Request('https://api.test/api/health', {
+    method: 'OPTIONS',
+    headers: { Origin: 'https://69poker.club' }
+  }), env);
+  assert.equal(result.status, 204);
+  assert.equal(result.headers.get('Access-Control-Allow-Origin'), 'https://69poker.club');
+  assert.equal(await result.text(), '');
+});
