@@ -3,12 +3,12 @@ const $$ = (selector, context = document) => [...context.querySelectorAll(select
 
 const LIVE_API_BASE = document.querySelector('meta[name="live-api-base"]')?.content.replace(/\/$/, '') || '';
 const STUDIO_SESSION_KEY = '69poker_studio_session';
-const MUSIC_PREFERENCE_KEY = '69poker_background_music';
 const MUSIC_VOLUME = 0.24;
 let studioPollTimer = 0;
 let publicLivePollTimer = 0;
 let studioCredentials = null;
 let musicUnlockBound = false;
+let musicStoppedByUser = false;
 
 const icons = {
   home: '<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.7\'><path d=\'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3Z\'/></svg>',
@@ -91,31 +91,24 @@ function hydrateIcons(context = document) {
   });
 }
 
-function readMusicPreference() {
-  try { return localStorage.getItem(MUSIC_PREFERENCE_KEY) !== 'off'; }
-  catch { return true; }
-}
-
-function writeMusicPreference(enabled) {
-  try { localStorage.setItem(MUSIC_PREFERENCE_KEY, enabled ? 'on' : 'off'); }
-  catch { /* Playback still works when storage is unavailable. */ }
-}
-
 function updateMusicControl(state) {
   const button = $('#music-toggle');
   if (!button) return;
   const labels = {
-    loading: '背景音樂載入中',
-    waiting: '點擊頁面播放背景音樂',
-    playing: '暫停背景音樂',
-    off: '開啟背景音樂',
+    loading: '背景音樂自動播放中',
+    waiting: '瀏覽器阻止了自動播放，點擊以播放背景音樂',
+    playing: '停止背景音樂',
+    off: '重新播放背景音樂',
     error: '背景音樂無法播放'
   };
+  const buttonText = { loading: 'AUTO', waiting: 'PLAY', playing: 'STOP', off: 'PLAY', error: 'ERR' };
   const label = labels[state] || labels.off;
   button.dataset.state = state;
   button.setAttribute('aria-pressed', String(state === 'playing'));
   button.setAttribute('aria-label', label);
   button.title = label;
+  const text = $('.music-control-text', button);
+  if (text) text.textContent = buttonText[state] || buttonText.off;
 }
 
 function removeMusicUnlock() {
@@ -134,7 +127,7 @@ function bindMusicUnlock() {
 
 async function playBackgroundMusic({ announce = false } = {}) {
   const audio = $('#background-music');
-  if (!audio || !readMusicPreference()) return false;
+  if (!audio || musicStoppedByUser) return false;
   audio.volume = MUSIC_VOLUME;
   try {
     await audio.play();
@@ -154,7 +147,7 @@ function pauseBackgroundMusic({ announce = false } = {}) {
   const audio = $('#background-music');
   if (!audio) return;
   audio.pause();
-  writeMusicPreference(false);
+  musicStoppedByUser = true;
   removeMusicUnlock();
   updateMusicControl('off');
   if (announce) toast('背景音樂已關閉。');
@@ -167,13 +160,13 @@ async function toggleBackgroundMusic() {
     pauseBackgroundMusic({ announce: true });
     return;
   }
-  writeMusicPreference(true);
+  musicStoppedByUser = false;
   await playBackgroundMusic({ announce: true });
 }
 
 function unlockBackgroundMusic(event) {
   const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest('#music-toggle') || !readMusicPreference()) return;
+  if (target?.closest('#music-toggle') || musicStoppedByUser) return;
   playBackgroundMusic();
 }
 
@@ -183,18 +176,20 @@ function initBackgroundMusic() {
   audio.volume = MUSIC_VOLUME;
   audio.addEventListener('playing', () => updateMusicControl('playing'));
   audio.addEventListener('pause', () => {
-    if (!readMusicPreference()) updateMusicControl('off');
+    if (musicStoppedByUser) updateMusicControl('off');
   });
   audio.addEventListener('error', () => {
     updateMusicControl('error');
     removeMusicUnlock();
   });
-  if (readMusicPreference()) {
-    updateMusicControl('waiting');
-    playBackgroundMusic();
-  } else {
-    updateMusicControl('off');
-  }
+  const requestAutoplay = () => {
+    if (!musicStoppedByUser) playBackgroundMusic();
+  };
+  audio.addEventListener('canplay', requestAutoplay, { once: true });
+  window.addEventListener('load', requestAutoplay, { once: true });
+  window.addEventListener('pageshow', requestAutoplay);
+  updateMusicControl('loading');
+  requestAutoplay();
 }
 
 function getRoute() {
