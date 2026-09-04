@@ -3,9 +3,12 @@ const $$ = (selector, context = document) => [...context.querySelectorAll(select
 
 const LIVE_API_BASE = document.querySelector('meta[name="live-api-base"]')?.content.replace(/\/$/, '') || '';
 const STUDIO_SESSION_KEY = '69poker_studio_session';
+const MUSIC_PREFERENCE_KEY = '69poker_background_music';
+const MUSIC_VOLUME = 0.24;
 let studioPollTimer = 0;
 let publicLivePollTimer = 0;
 let studioCredentials = null;
+let musicUnlockBound = false;
 
 const icons = {
   home: '<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.7\'><path d=\'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3Z\'/></svg>',
@@ -86,6 +89,112 @@ function hydrateIcons(context = document) {
     const name = node.dataset.icon;
     if (icons[name]) node.innerHTML = icons[name];
   });
+}
+
+function readMusicPreference() {
+  try { return localStorage.getItem(MUSIC_PREFERENCE_KEY) !== 'off'; }
+  catch { return true; }
+}
+
+function writeMusicPreference(enabled) {
+  try { localStorage.setItem(MUSIC_PREFERENCE_KEY, enabled ? 'on' : 'off'); }
+  catch { /* Playback still works when storage is unavailable. */ }
+}
+
+function updateMusicControl(state) {
+  const button = $('#music-toggle');
+  if (!button) return;
+  const labels = {
+    loading: '背景音樂載入中',
+    waiting: '點擊頁面播放背景音樂',
+    playing: '暫停背景音樂',
+    off: '開啟背景音樂',
+    error: '背景音樂無法播放'
+  };
+  const label = labels[state] || labels.off;
+  button.dataset.state = state;
+  button.setAttribute('aria-pressed', String(state === 'playing'));
+  button.setAttribute('aria-label', label);
+  button.title = label;
+}
+
+function removeMusicUnlock() {
+  if (!musicUnlockBound) return;
+  document.removeEventListener('pointerdown', unlockBackgroundMusic, true);
+  document.removeEventListener('keydown', unlockBackgroundMusic, true);
+  musicUnlockBound = false;
+}
+
+function bindMusicUnlock() {
+  if (musicUnlockBound) return;
+  document.addEventListener('pointerdown', unlockBackgroundMusic, true);
+  document.addEventListener('keydown', unlockBackgroundMusic, true);
+  musicUnlockBound = true;
+}
+
+async function playBackgroundMusic({ announce = false } = {}) {
+  const audio = $('#background-music');
+  if (!audio || !readMusicPreference()) return false;
+  audio.volume = MUSIC_VOLUME;
+  try {
+    await audio.play();
+    updateMusicControl('playing');
+    removeMusicUnlock();
+    if (announce) toast('背景音樂已開啟。', 'success');
+    return true;
+  } catch {
+    updateMusicControl('waiting');
+    bindMusicUnlock();
+    if (announce) toast('瀏覽器暫停了自動播放，請再點一下音樂按鈕。');
+    return false;
+  }
+}
+
+function pauseBackgroundMusic({ announce = false } = {}) {
+  const audio = $('#background-music');
+  if (!audio) return;
+  audio.pause();
+  writeMusicPreference(false);
+  removeMusicUnlock();
+  updateMusicControl('off');
+  if (announce) toast('背景音樂已關閉。');
+}
+
+async function toggleBackgroundMusic() {
+  const audio = $('#background-music');
+  if (!audio) return;
+  if (!audio.paused) {
+    pauseBackgroundMusic({ announce: true });
+    return;
+  }
+  writeMusicPreference(true);
+  await playBackgroundMusic({ announce: true });
+}
+
+function unlockBackgroundMusic(event) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('#music-toggle') || !readMusicPreference()) return;
+  playBackgroundMusic();
+}
+
+function initBackgroundMusic() {
+  const audio = $('#background-music');
+  if (!audio) return;
+  audio.volume = MUSIC_VOLUME;
+  audio.addEventListener('playing', () => updateMusicControl('playing'));
+  audio.addEventListener('pause', () => {
+    if (!readMusicPreference()) updateMusicControl('off');
+  });
+  audio.addEventListener('error', () => {
+    updateMusicControl('error');
+    removeMusicUnlock();
+  });
+  if (readMusicPreference()) {
+    updateMusicControl('waiting');
+    playBackgroundMusic();
+  } else {
+    updateMusicControl('off');
+  }
 }
 
 function getRoute() {
@@ -578,6 +687,7 @@ function escapeHtml(value) {
 
 async function handleAction(button) {
   const action = button.dataset.action;
+  if (action === 'toggle-music') await toggleBackgroundMusic();
   if (action === 'notifications') openNotifications();
   if (action === 'close-dialog') closeDialog();
   if (action === 'studio-refresh') {
@@ -1141,6 +1251,7 @@ document.addEventListener('keydown', event => {
 
 window.addEventListener('hashchange', render);
 hydrateIcons();
+initBackgroundMusic();
 initKineticHeader();
 if (!location.hash) history.replaceState(null, '', '#/');
 render();
