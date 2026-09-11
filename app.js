@@ -4,8 +4,15 @@ const $$ = (selector, context = document) => [...context.querySelectorAll(select
 const LIVE_API_BASE = document.querySelector('meta[name="live-api-base"]')?.content.replace(/\/$/, '') || '';
 const STUDIO_SESSION_KEY = '69poker_studio_session';
 const MUSIC_VOLUME = 0.24;
+const SRS_STREAM_NAME = 'test';
+const SRS_STATUS_URL = 'https://live.69poker.club/api/v1/streams/';
+const SRS_FLV_URL = `https://live.69poker.club/live/${SRS_STREAM_NAME}.flv`;
+const SRS_HLS_URL = `https://live.69poker.club/live/${SRS_STREAM_NAME}.m3u8`;
+const MPEGTS_LIBRARY_URL = 'https://live.69poker.club/players/js/mpegts-1.7.2.min.js';
 let studioPollTimer = 0;
 let publicLivePollTimer = 0;
+let directLivePlayer = null;
+let mpegtsLibraryPromise = null;
 let studioCredentials = null;
 let musicUnlockBound = false;
 let musicStoppedByUser = false;
@@ -316,6 +323,7 @@ function clearLivePolling() {
   window.clearInterval(publicLivePollTimer);
   studioPollTimer = 0;
   publicLivePollTimer = 0;
+  destroyDirectLivePlayer();
 }
 
 async function liveRequest(path, options = {}) {
@@ -358,6 +366,170 @@ function mountStreamPlayer(mount, playerUrl, autoplay = false) {
   if (mount.dataset.playerUrl === source) return;
   mount.dataset.playerUrl = source;
   mount.innerHTML = `<iframe src='${source}' title='69Poker 直播播放器' allow='accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture' allowfullscreen></iframe>`;
+}
+
+function loadMpegtsLibrary() {
+  if (window.mpegts) return Promise.resolve(window.mpegts);
+  if (mpegtsLibraryPromise) return mpegtsLibraryPromise;
+  mpegtsLibraryPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src='${MPEGTS_LIBRARY_URL}']`);
+    const script = existing || document.createElement('script');
+    const onLoad = () => {
+      if (window.mpegts) resolve(window.mpegts);
+      else {
+        script.remove();
+        reject(new Error('播放器载入失败'));
+      }
+    };
+    script.addEventListener('load', onLoad, { once: true });
+    script.addEventListener('error', () => {
+      script.remove();
+      reject(new Error('播放器载入失败'));
+    }, { once: true });
+    if (!existing) {
+      script.src = MPEGTS_LIBRARY_URL;
+      script.async = true;
+      document.head.append(script);
+    } else if (window.mpegts) {
+      resolve(window.mpegts);
+    }
+  }).catch(error => {
+    mpegtsLibraryPromise = null;
+    throw error;
+  });
+  return mpegtsLibraryPromise;
+}
+
+function destroyDirectLivePlayer() {
+  const player = directLivePlayer;
+  directLivePlayer = null;
+  if (player?.type === 'mpegts') {
+    try { player.instance.pause(); } catch {}
+    try { player.instance.unload(); } catch {}
+    try { player.instance.detachMediaElement(); } catch {}
+    try { player.instance.destroy(); } catch {}
+  }
+  const video = $('#srs-live-video');
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+}
+
+function updateDirectLivePageCopy() {
+  const route = getRoute();
+  const root = $('.watch-layout > div');
+  if (!root) return;
+  const channelTitle = $('.watch-info .channel-line h2', root);
+  const channelMeta = $('.watch-info .channel-line p', root);
+  if (channelTitle) channelTitle.textContent = '69Poker Live';
+  if (channelMeta) channelMeta.textContent = `SIX & NINE CLUB · LIVE/${SRS_STREAM_NAME}`;
+  const sectionTitle = $('.content-section .section-title h2', root);
+  const sectionSubtitle = $('.content-section .section-title p', root);
+  if (sectionTitle) sectionTitle.innerHTML = 'LIVE <span>SYSTEM</span>';
+  if (sectionSubtitle) sectionSubtitle.textContent = '实时串流状态';
+  const rows = $$('.timeline-item', root);
+  if (rows[0]) rows[0].innerHTML = `<time>RTMP</time><p>推流服务器：live.69poker.club/live</p><span>${SRS_STREAM_NAME.toUpperCase()}</span>`;
+  if (rows[1]) rows[1].innerHTML = '<time>PLAY</time><p>网页自动侦测讯号并同步播放</p><span>AUTO</span>';
+  if (rows[2]) rows[2].innerHTML = '<time>STATUS</time><p>停止推流后自动返回待机画面</p><span>RECONNECT</span>';
+  if (route === '/live/official') {
+    const headerDescription = $('.page-header .page-subtitle');
+    if (headerDescription) headerDescription.textContent = `直播讯号已连接至 live/${SRS_STREAM_NAME}；OBS 开始推流后自动播放。`;
+  }
+}
+
+function prepareDirectLiveShell() {
+  let shell = $('#public-live-shell');
+  if (!shell) shell = $('.watch-layout > div > .video-player');
+  if (!shell) return null;
+  shell.id = 'public-live-shell';
+  shell.classList.add('live-stream-shell', 'srs-direct-shell');
+  shell.innerHTML = `<div class='live-player-mount' id='public-live-player'><div class='direct-live-loader'><span class='direct-live-signal' aria-hidden='true'><i></i><i></i><i></i></span><p class='eyebrow'>69POKER LIVE INPUT</p><h2>正在检查直播讯号</h2><p>连接至 LIVE / ${SRS_STREAM_NAME.toUpperCase()}</p></div></div><span class='status preview-badge' id='public-live-badge'>CONNECTING · ${SRS_STREAM_NAME.toUpperCase()}</span>`;
+  updateDirectLivePageCopy();
+  return shell;
+}
+
+function updateLiveAudioButton(video) {
+  const button = $('#live-audio-button');
+  if (!button || !video) return;
+  button.textContent = video.muted ? '开启直播声音' : '关闭直播声音';
+  button.classList.toggle('is-on', !video.muted);
+  button.setAttribute('aria-pressed', String(!video.muted));
+}
+
+function markDirectLivePlaying(video, mount) {
+  if (!video?.isConnected || !mount?.isConnected) return;
+  video.classList.add('is-ready');
+  $('.direct-live-loader', mount)?.setAttribute('hidden', '');
+  const badge = $('#public-live-badge');
+  if (badge) {
+    badge.textContent = `LIVE · ${SRS_STREAM_NAME.toUpperCase()}`;
+    badge.classList.add('live');
+  }
+  pauseBackgroundMusic();
+}
+
+function handleDirectLiveError(message = '直播讯号暂时中断，正在重新连接。') {
+  const mount = $('#public-live-player');
+  destroyDirectLivePlayer();
+  if (mount) {
+    mount.removeAttribute('data-direct-stream');
+    showOfflineState(mount, '讯号重新连接中', message);
+  }
+  const badge = $('#public-live-badge');
+  if (badge) {
+    badge.textContent = `RECONNECTING · ${SRS_STREAM_NAME.toUpperCase()}`;
+    badge.classList.remove('live');
+  }
+}
+
+async function mountDirectLivePlayer(mount) {
+  if (!mount || mount.dataset.directStream === SRS_STREAM_NAME) return;
+  destroyDirectLivePlayer();
+  mount.removeAttribute('data-offline-title');
+  mount.dataset.directStream = SRS_STREAM_NAME;
+  mount.innerHTML = `<video class='direct-live-video' id='srs-live-video' controls muted autoplay playsinline aria-label='69Poker 直播画面'></video><div class='direct-live-loader'><span class='direct-live-signal' aria-hidden='true'><i></i><i></i><i></i></span><p class='eyebrow'>LIVE SIGNAL ACQUIRED</p><h2>正在同步直播画面</h2><p>首次连接需要几秒钟</p></div><div class='direct-live-hud'><button class='live-audio-button' id='live-audio-button' data-action='toggle-live-audio' aria-pressed='false'>开启直播声音</button><span>LIVE / ${SRS_STREAM_NAME.toUpperCase()}</span></div>`;
+  const video = $('#srs-live-video', mount);
+  video.addEventListener('playing', () => markDirectLivePlaying(video, mount));
+  video.addEventListener('volumechange', () => updateLiveAudioButton(video));
+  const userAgent = navigator.userAgent;
+  const isAppleHlsBrowser = /iP(ad|hone|od)/i.test(userAgent) || (/Safari/i.test(userAgent) && !/(Chrome|Chromium|CriOS|Edg|EdgiOS|FxiOS|OPR)/i.test(userAgent));
+  const canUseNativeHls = isAppleHlsBrowser && Boolean(video.canPlayType('application/vnd.apple.mpegurl'));
+  if (canUseNativeHls) {
+    directLivePlayer = { type: 'native', video };
+    video.addEventListener('error', () => {
+      if (directLivePlayer?.video === video) handleDirectLiveError();
+    }, { once: true });
+    video.src = SRS_HLS_URL;
+    video.play().catch(() => {});
+    return;
+  }
+  try {
+    const mpegts = await loadMpegtsLibrary();
+    if (!video.isConnected || !mpegts.isSupported()) throw new Error('此浏览器不支持直播格式');
+    const player = mpegts.createPlayer({ type: 'flv', isLive: true, cors: true, url: SRS_FLV_URL }, {
+      enableWorker: false,
+      enableStashBuffer: false,
+      lazyLoad: false,
+      deferLoadAfterSourceOpen: false,
+      liveBufferLatencyChasing: true,
+      liveBufferLatencyMaxLatency: 1.5,
+      liveBufferLatencyMinRemain: 0.35,
+      autoCleanupSourceBuffer: true,
+      autoCleanupMaxBackwardDuration: 30,
+      autoCleanupMinBackwardDuration: 15
+    });
+    directLivePlayer = { type: 'mpegts', instance: player, video };
+    player.attachMediaElement(video);
+    player.load();
+    player.play().catch(() => {});
+    player.on(mpegts.Events.ERROR, () => {
+      if (directLivePlayer?.instance === player) handleDirectLiveError();
+    });
+  } catch (error) {
+    if (video.isConnected) handleDirectLiveError(error.message);
+  }
 }
 
 function showOfflineState(mount, title, message) {
@@ -474,37 +646,50 @@ async function initStudio() {
   }
 }
 
-function updatePublicLive(data) {
+function updatePublicLive(isLive) {
   if (!$('#public-live-shell')) return;
   const badge = $('#public-live-badge');
   const mount = $('#public-live-player');
-  if ($('#public-channel-title')) $('#public-channel-title').textContent = data.title || '69 POKER LIVE GAME';
-  if ($('#public-channel-meta')) $('#public-channel-meta').textContent = `${data.category || 'SIX & NINE CLUB'} · ${data.live ? '正在直播' : '等待 OBS 讯号'}`;
-  if (badge) { badge.textContent = data.live ? 'LIVE · ON AIR' : 'OFFLINE · STANDBY'; badge.classList.toggle('live', data.live); }
-  if (data.live && data.playerUrl) mountStreamPlayer(mount, data.playerUrl, true);
-  else showOfflineState(mount, '目前尚未开播', 'OBS 开始推流后，本页面会自动切换为直播画面。');
+  const meta = $('#public-channel-meta');
+  if (meta) meta.textContent = `SIX & NINE CLUB · ${isLive ? '正在直播' : `等待 LIVE/${SRS_STREAM_NAME}`}`;
+  if (badge) {
+    badge.textContent = isLive ? `LIVE · ${SRS_STREAM_NAME.toUpperCase()}` : `OFFLINE · ${SRS_STREAM_NAME.toUpperCase()}`;
+    badge.classList.toggle('live', isLive);
+  }
+  if (isLive) mountDirectLivePlayer(mount);
+  else {
+    if (directLivePlayer || mount?.dataset.directStream) destroyDirectLivePlayer();
+    mount?.removeAttribute('data-direct-stream');
+    showOfflineState(mount, '等待直播讯号', `OBS 推流至 rtmp://live.69poker.club/live，流名称使用 ${SRS_STREAM_NAME}，画面会自动上线。`);
+  }
 }
 
 async function refreshPublicLive(showError = false) {
   try {
-    updatePublicLive(await liveRequest('/api/public/live'));
+    const response = await fetch(SRS_STATUS_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('直播状态服务暂时无法使用。');
+    const data = await response.json();
+    const stream = Array.isArray(data.streams) ? data.streams.find(item => item.name === SRS_STREAM_NAME && item.app === 'live') : null;
+    updatePublicLive(Boolean(stream?.publish?.active));
   } catch (error) {
     const badge = $('#public-live-badge');
-    if (badge) badge.textContent = 'SERVICE OFFLINE';
-    showOfflineState($('#public-live-player'), '直播服务暂时离线', '请稍后重新整理页面。');
+    if (directLivePlayer && $('#srs-live-video')) {
+      if (badge) badge.textContent = `LIVE · CHECKING ${SRS_STREAM_NAME.toUpperCase()}`;
+      return;
+    }
+    if (badge) {
+      badge.textContent = 'SIGNAL CHECK FAILED';
+      badge.classList.remove('live');
+    }
+    showOfflineState($('#public-live-player'), '直播状态暂时无法读取', '播放器会继续自动重新连接，无需重新整理页面。');
     if (showError) toast(error.message);
   }
 }
 
 async function initPublicLive() {
-  if (!LIVE_API_BASE) {
-    const badge = $('#public-live-badge');
-    if (badge) badge.textContent = 'DEPLOYING';
-    showOfflineState($('#public-live-player'), '直播服务部署中', '安全后端上线后，此频道即可接收 OBS 直播。');
-    return;
-  }
+  if (!prepareDirectLiveShell()) return;
   await refreshPublicLive();
-  publicLivePollTimer = window.setInterval(() => refreshPublicLive(false), 7000);
+  publicLivePollTimer = window.setInterval(() => refreshPublicLive(false), 3000);
 }
 
 function render() {
@@ -523,7 +708,7 @@ function render() {
   document.body.classList.remove('nav-open');
   $('.menu-toggle').setAttribute('aria-expanded', 'false');
   if (route === '/creator/live') initStudio();
-  if (route === '/channel/member') initPublicLive();
+  if (route === '/live/official' || route === '/channel/member') initPublicLive();
 }
 
 function renderSequenceNav(route) {
@@ -683,6 +868,18 @@ function escapeHtml(value) {
 async function handleAction(button) {
   const action = button.dataset.action;
   if (action === 'toggle-music') await toggleBackgroundMusic();
+  if (action === 'toggle-live-audio') {
+    const video = $('#srs-live-video');
+    if (video) {
+      video.muted = !video.muted;
+      if (!video.muted) {
+        const backgroundMusic = $('#background-music');
+        if (backgroundMusic && !backgroundMusic.paused) pauseBackgroundMusic();
+        video.play().catch(() => {});
+      }
+      updateLiveAudioButton(video);
+    }
+  }
   if (action === 'notifications') openNotifications();
   if (action === 'close-dialog') closeDialog();
   if (action === 'studio-refresh') {
